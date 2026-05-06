@@ -2,6 +2,9 @@
   "name": "pixelagent",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
   "workspaces": [
     "packages/*"
   ],

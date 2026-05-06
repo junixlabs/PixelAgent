@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { Scene } from '../grammar.js';
+import type { Scene } from '../src/index.js';
 
 describe('@pixelagent/dsl-spec', () => {
-  it('exports Scene type via grammar module', () => {
+  it('exports Scene type', () => {
     const scene: Scene = null;
     expect(scene).toBeNull();
   });

@@ -7,8 +7,5 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "puppeteer": "^23.10.4"
   }
 }
