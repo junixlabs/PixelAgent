@@ -1,0 +1,14 @@
+{
+  "name": "@pixelagent/renderer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "puppeteer": "^23.10.4"
+  }
+}

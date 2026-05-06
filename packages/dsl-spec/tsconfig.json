@@ -1,0 +1,4 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["grammar.ts", "tests/**/*.ts"]
+}
