@@ -16,6 +16,12 @@ export type {
   ValidationWarning,
 };
 
+/**
+ * Lexer output. `kvinline.raw` is the unparsed value text (no quotes for
+ * plain values; quotes preserved for quoted-string values). The parser
+ * coerces it per command schema. Compound border values (`border:1 #ccc`)
+ * are reassembled at the parser layer by looking ahead for a trailing color.
+ */
 export type Token =
   | { kind: 'command'; value: string; line: number; column: number }
   | { kind: 'end'; line: number; column: number }
@@ -39,15 +45,6 @@ export type Token =
       column: number;
     }
   | { kind: 'newline'; line: number; column: number };
-
-/** Source line per Node (and ScreenNode/TokenNode). Validator uses it for diagnostics. */
-export type LineMap = WeakMap<object, number>;
-
-export type BuildResult = {
-  scene: Scene | null;
-  errors: ValidationWarning[];
-  lineMap: LineMap;
-};
 
 export type ParseResult = {
   scene: Scene | null;
