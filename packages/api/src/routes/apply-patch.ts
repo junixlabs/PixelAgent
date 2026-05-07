@@ -40,20 +40,20 @@ export const applyPatchRoutes: FastifyPluginAsync = async (app) => {
       if (!result.ok) {
         switch (result.kind) {
           case 'parse_failed':
-            req.log.warn({ count: result.details.length }, 'apply-patch parse_failed');
+            req.log.warn({ count: result.errors.length }, 'apply-patch parse_failed');
             return reply
               .code(422)
-              .send({ error: 'parse_failed', details: result.details });
+              .send({ error: 'parse_failed', errors: result.errors });
           case 'patch_no_op':
-            req.log.warn({ errors: result.details }, 'patch_no_op');
+            req.log.warn({ errors: result.errors }, 'patch_no_op');
             return reply
               .code(422)
-              .send({ error: 'patch_no_op', details: result.details });
+              .send({ error: 'patch_no_op', errors: result.errors });
           case 'patch_invalid_result':
-            req.log.error({ errors: result.details }, 'patch_invalid_result');
+            req.log.error({ errors: result.errors }, 'patch_invalid_result');
             return reply
               .code(422)
-              .send({ error: 'patch_invalid_result', details: result.details });
+              .send({ error: 'patch_invalid_result', errors: result.errors });
           case 'render_failed':
             req.log.error({ message: result.message }, 'render_failed');
             return reply

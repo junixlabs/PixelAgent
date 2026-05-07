@@ -16,9 +16,9 @@ export type ApplyPatchOk = {
 };
 
 export type ApplyPatchErr =
-  | { ok: false; kind: 'parse_failed'; details: ValidationWarning[] }
-  | { ok: false; kind: 'patch_no_op'; details: string[] }
-  | { ok: false; kind: 'patch_invalid_result'; details: ValidationWarning[] }
+  | { ok: false; kind: 'parse_failed'; errors: ValidationWarning[] }
+  | { ok: false; kind: 'patch_no_op'; errors: string[] }
+  | { ok: false; kind: 'patch_invalid_result'; errors: ValidationWarning[] }
   | { ok: false; kind: 'render_failed'; message: string };
 
 export type ApplyPatchInput = { dsl: string; ops: PatchOp[] };
@@ -35,12 +35,12 @@ export const applyPatchService = async (
   const parsed = parse(input.dsl);
   const errors = parsed.warnings.filter((w) => w.severity === 'error');
   if (errors.length > 0 || parsed.scene == null) {
-    return { ok: false, kind: 'parse_failed', details: errors };
+    return { ok: false, kind: 'parse_failed', errors };
   }
 
   const result = applyPatch(parsed.scene, input.ops);
   if (result.applied.length === 0 && result.errors.length > 0) {
-    return { ok: false, kind: 'patch_no_op', details: result.errors };
+    return { ok: false, kind: 'patch_no_op', errors: result.errors };
   }
 
   const newDsl = serialize(result.scene);
@@ -52,7 +52,7 @@ export const applyPatchService = async (
     (w) => w.severity === 'error',
   );
   if (reparseErrors.length > 0 || reparsed.scene == null) {
-    return { ok: false, kind: 'patch_invalid_result', details: reparseErrors };
+    return { ok: false, kind: 'patch_invalid_result', errors: reparseErrors };
   }
 
   try {

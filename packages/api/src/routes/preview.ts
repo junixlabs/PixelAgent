@@ -22,10 +22,10 @@ export const previewRoutes: FastifyPluginAsync = async (app) => {
       const result = await previewService(req.body);
       if (!result.ok) {
         if (result.kind === 'parse_failed') {
-          req.log.warn({ count: result.details.length }, 'preview parse_failed');
+          req.log.warn({ count: result.errors.length }, 'preview parse_failed');
           return reply.code(422).send({
             error: 'parse_failed',
-            details: result.details,
+            errors: result.errors,
             warnings: result.warnings,
           });
         }

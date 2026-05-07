@@ -46,9 +46,9 @@ describe('POST /preview', () => {
     expect(res.statusCode).toBe(422);
     const body = res.json();
     expect(body.error).toBe('parse_failed');
-    expect(Array.isArray(body.details)).toBe(true);
-    expect(body.details.length).toBeGreaterThan(0);
-    const text = JSON.stringify(body.details).toLowerCase();
+    expect(Array.isArray(body.errors)).toBe(true);
+    expect(body.errors.length).toBeGreaterThan(0);
+    const text = JSON.stringify(body.errors).toLowerCase();
     expect(text).toContain('screen');
     expect(body.png_base64).toBeUndefined();
   });
