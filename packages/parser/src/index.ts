@@ -25,6 +25,8 @@ export function parse(input: string): ParseResult {
 export { tokenize } from './tokenizer.js';
 export { validate } from './validator.js';
 export { buildScene } from './parser.js';
+export { applyPatch } from './apply-patch.js';
+export { serialize } from './serialize.js';
 export type {
   Scene,
   Node,
@@ -33,4 +35,6 @@ export type {
   ValidationWarning,
   ParseResult,
   Token,
+  PatchOp,
+  ApplyPatchResult,
 } from './types.js';
