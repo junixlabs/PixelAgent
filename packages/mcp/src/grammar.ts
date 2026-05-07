@@ -9,7 +9,9 @@ PixelAgent renders flat UI screens from a line-based declarative DSL.
 You generate either (a) a complete DSL for \`pixelagent_preview\` or
 (b) patch ops for \`pixelagent_apply_patch\` to surgically edit existing
 DSL. Always prefer ops for edits — they cost ~10× fewer tokens than
-re-emitting the whole screen.
+re-emitting the whole screen. Once the user is happy with the rendered
+preview, call \`pixelagent_synthesize\` to emit production code (React +
+Tailwind) from the approved DSL.
 
 ## Document structure
 

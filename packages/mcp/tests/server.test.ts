@@ -52,7 +52,7 @@ const readResource = async (
 };
 
 describe('MCP server — primitive tools (no LLM)', () => {
-  it('registers preview + apply_patch tools and grammar resource', () => {
+  it('registers preview + apply_patch + synthesize tools and grammar resource', () => {
     const server = buildMcpServer();
     const tools = (server as unknown as {
       _registeredTools: Record<string, unknown>;
@@ -60,6 +60,7 @@ describe('MCP server — primitive tools (no LLM)', () => {
     expect(Object.keys(tools).sort()).toEqual([
       'pixelagent_apply_patch',
       'pixelagent_preview',
+      'pixelagent_synthesize',
     ]);
     const resources = (server as unknown as {
       _registeredResources: Record<string, unknown>;
@@ -131,6 +132,37 @@ describe('MCP server — primitive tools (no LLM)', () => {
     const result = await callTool(server, 'pixelagent_apply_patch', {
       dsl: 'TOKEN x #fff\n',
       ops: [{ op: 'modify', id: 'x', field: 'value', value: '#000' }],
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content.find((c: { type: string }) => c.type === 'text');
+    expect(text.text).toContain('parse_failed');
+  });
+
+  it('synthesize emits React code from valid DSL', async () => {
+    const server = buildMcpServer();
+    const result = await callTool(server, 'pixelagent_synthesize', {
+      dsl: loginDsl,
+    });
+    expect(result.isError).toBeFalsy();
+    const text = result.content.find((c: { type: string }) => c.type === 'text');
+    expect(text.text).toContain('Synthesized');
+    expect(text.text).toContain('export default function');
+    expect(text.text).toContain('>Sign in</button>');
+    expect(text.text).toContain('bg-[#185FA5]');
+  });
+
+  it('synthesize defaults target to "react" when omitted', async () => {
+    const server = buildMcpServer();
+    const result = await callTool(server, 'pixelagent_synthesize', {
+      dsl: loginDsl,
+    });
+    expect(result.isError).toBeFalsy();
+  });
+
+  it('synthesize returns isError for parse failure', async () => {
+    const server = buildMcpServer();
+    const result = await callTool(server, 'pixelagent_synthesize', {
+      dsl: 'TOKEN x #fff\n',
     });
     expect(result.isError).toBe(true);
     const text = result.content.find((c: { type: string }) => c.type === 'text');

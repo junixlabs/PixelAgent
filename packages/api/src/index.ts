@@ -13,14 +13,15 @@ export {
   type PreviewErr,
 } from './services/preview.js';
 export {
-  patchService,
-  type PatchInput,
-  type PatchOk,
-  type PatchErr,
-} from './services/patch.js';
-export {
   applyPatchService,
   type ApplyPatchInput,
   type ApplyPatchOk,
   type ApplyPatchErr,
 } from './services/apply-patch.js';
+export {
+  synthesizeService,
+  type SynthesizeInput,
+  type SynthesizeOk,
+  type SynthesizeErr,
+  type SynthesizeTarget,
+} from './services/synthesize.js';

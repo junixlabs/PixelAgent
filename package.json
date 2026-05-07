@@ -11,7 +11,8 @@
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "mcp:walkthrough": "node scripts/mcp-walkthrough.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

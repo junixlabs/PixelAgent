@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.33.0",
+    "@pixelagent/codegen": "*",
     "@pixelagent/parser": "*",
     "@pixelagent/renderer": "*",
     "fastify": "^5.2.0",

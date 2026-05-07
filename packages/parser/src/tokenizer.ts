@@ -251,7 +251,10 @@ export function tokenize(input: string): TokenizeResult {
       errors.push({
         rule: 'lex-error',
         line: lineNo,
-        message: `unexpected character '${ch}'`,
+        message:
+          ch === '%'
+            ? "'%' is not a valid token. PixelAgent DSL uses integer px values only (e.g., use '1440' instead of '100%')."
+            : `unexpected character '${ch}'`,
         severity: 'error',
       });
       p++;
