@@ -44,8 +44,8 @@ const formatPreviewErr = (err: PreviewErr): string => {
   switch (err.kind) {
     case 'parse_failed':
       return (
-        `parse_failed (${err.details.length} errors):\n` +
-        err.details.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
+        `parse_failed (${err.errors.length} errors):\n` +
+        err.errors.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
       );
     case 'render_failed':
       return `render_failed: ${err.message}`;
@@ -54,8 +54,8 @@ const formatPreviewErr = (err: PreviewErr): string => {
 
 const formatSynthesizeErr = (err: SynthesizeErr): string => {
   return (
-    `parse_failed (${err.details.length} errors):\n` +
-    err.details.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
+    `parse_failed (${err.errors.length} errors):\n` +
+    err.errors.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
   );
 };
 
@@ -63,15 +63,15 @@ const formatApplyPatchErr = (err: ApplyPatchErr): string => {
   switch (err.kind) {
     case 'parse_failed':
       return (
-        `parse_failed (${err.details.length} errors):\n` +
-        err.details.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
+        `parse_failed (${err.errors.length} errors):\n` +
+        err.errors.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
       );
     case 'patch_no_op':
-      return `patch_no_op:\n` + err.details.map((d) => `  ${d}`).join('\n');
+      return `patch_no_op:\n` + err.errors.map((e) => `  ${e}`).join('\n');
     case 'patch_invalid_result':
       return (
-        `patch_invalid_result (defensive re-parse caught ${err.details.length} errors):\n` +
-        err.details.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
+        `patch_invalid_result (defensive re-parse caught ${err.errors.length} errors):\n` +
+        err.errors.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
       );
     case 'render_failed':
       return `render_failed: ${err.message}`;

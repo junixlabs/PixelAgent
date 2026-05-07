@@ -17,7 +17,7 @@ export type SynthesizeOk = {
 export type SynthesizeErr = {
   ok: false;
   kind: 'parse_failed';
-  details: ValidationWarning[];
+  errors: ValidationWarning[];
 };
 
 /**
@@ -31,7 +31,7 @@ export const synthesizeService = (
   const parsed = parse(input.dsl);
   const errors = parsed.warnings.filter((w) => w.severity === 'error');
   if (errors.length > 0 || parsed.scene == null) {
-    return { ok: false, kind: 'parse_failed', details: errors };
+    return { ok: false, kind: 'parse_failed', errors };
   }
   const code =
     input.target === 'react' ? toReact(parsed.scene) : toReact(parsed.scene);

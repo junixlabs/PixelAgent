@@ -12,7 +12,7 @@ export type PreviewErr =
   | {
       ok: false;
       kind: 'parse_failed';
-      details: ValidationWarning[];
+      errors: ValidationWarning[];
       warnings: ValidationWarning[];
     }
   | { ok: false; kind: 'render_failed'; message: string };
@@ -32,7 +32,7 @@ export const previewService = async (
   const warns = warnings.filter((w) => w.severity === 'warning');
 
   if (errors.length > 0 || scene == null) {
-    return { ok: false, kind: 'parse_failed', details: errors, warnings: warns };
+    return { ok: false, kind: 'parse_failed', errors, warnings: warns };
   }
 
   const start = performance.now();

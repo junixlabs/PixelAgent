@@ -23,7 +23,7 @@ export const synthesizeRoutes: FastifyPluginAsync = async (app) => {
       if (!result.ok) {
         return reply
           .code(422)
-          .send({ error: 'parse_failed', details: result.details });
+          .send({ error: 'parse_failed', errors: result.errors });
       }
       return reply.code(200).send({
         code: result.code,
