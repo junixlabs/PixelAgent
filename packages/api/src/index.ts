@@ -18,3 +18,9 @@ export {
   type PatchOk,
   type PatchErr,
 } from './services/patch.js';
+export {
+  applyPatchService,
+  type ApplyPatchInput,
+  type ApplyPatchOk,
+  type ApplyPatchErr,
+} from './services/apply-patch.js';

@@ -1,31 +1,35 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
-  patchService,
+  applyPatchService,
   previewService,
-  type PatchErr,
+  type ApplyPatchErr,
   type PreviewErr,
 } from '@pixelagent/api';
+import type { PatchOp } from '@pixelagent/parser';
+import { GRAMMAR_REFERENCE } from './grammar.js';
 
 // The SDK's `registerTool` is generic over the input schema and produces a
 // callback type too deep for TS to resolve through our shapes. We type the
 // args explicitly and cast the callback at the SDK boundary; runtime
 // validation is still enforced by zod via the SDK.
 type PreviewArgs = { dsl: string; scale?: number };
-type PatchArgs = { dsl: string; instruction: string };
+type ApplyPatchArgs = { dsl: string; ops: PatchOp[] };
 
 const PREVIEW_DESCRIPTION =
   'Render a PixelAgent DSL string to a PNG bitmap preview. ' +
-  'Use this to show a screen design without generating final code. ' +
-  'Returns the PNG image plus any validator warnings.';
+  'Use this to draft a brand-new screen. For edits to existing DSL, ' +
+  'prefer `pixelagent_apply_patch` — it costs ~10× fewer tokens than ' +
+  're-emitting the whole DSL.';
 
-const PATCH_DESCRIPTION =
-  'Apply a natural-language edit to an existing DSL screen. ' +
-  'The model proposes patch ops (modify/add/remove) which are validated ' +
-  'against the AST and applied surgically. Returns the new DSL plus a ' +
-  'PNG of the patched screen and the token cost.';
+const APPLY_PATCH_DESCRIPTION =
+  'Apply structured patch ops (modify / add / remove) to an existing DSL ' +
+  'and re-render. Use this for any edit instead of regenerating the full ' +
+  'DSL. Read the `pixelagent://grammar` resource for the ops schema and ' +
+  'field reference. The server validates each op per node-type rules and ' +
+  'returns warnings for ops that did not apply.';
 
-const formatErrorText = (err: PreviewErr | PatchErr): string => {
+const formatPreviewErr = (err: PreviewErr): string => {
   switch (err.kind) {
     case 'parse_failed':
       return (
@@ -34,12 +38,16 @@ const formatErrorText = (err: PreviewErr | PatchErr): string => {
       );
     case 'render_failed':
       return `render_failed: ${err.message}`;
-    case 'anthropic_api_key_missing':
-      return 'anthropic_api_key_missing — set ANTHROPIC_API_KEY in the MCP server env.';
-    case 'llm_invalid_output':
-      return `llm_invalid_output: ${err.message}`;
-    case 'llm_call_failed':
-      return `llm_call_failed: ${err.message}`;
+  }
+};
+
+const formatApplyPatchErr = (err: ApplyPatchErr): string => {
+  switch (err.kind) {
+    case 'parse_failed':
+      return (
+        `parse_failed (${err.details.length} errors):\n` +
+        err.details.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
+      );
     case 'patch_no_op':
       return `patch_no_op:\n` + err.details.map((d) => `  ${d}`).join('\n');
     case 'patch_invalid_result':
@@ -47,6 +55,8 @@ const formatErrorText = (err: PreviewErr | PatchErr): string => {
         `patch_invalid_result (defensive re-parse caught ${err.details.length} errors):\n` +
         err.details.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
       );
+    case 'render_failed':
+      return `render_failed: ${err.message}`;
   }
 };
 
@@ -55,7 +65,7 @@ const handlePreview = async ({ dsl, scale }: PreviewArgs) => {
   if (!result.ok) {
     return {
       isError: true,
-      content: [{ type: 'text' as const, text: formatErrorText(result) }],
+      content: [{ type: 'text' as const, text: formatPreviewErr(result) }],
     };
   }
   const summary =
@@ -78,16 +88,16 @@ const handlePreview = async ({ dsl, scale }: PreviewArgs) => {
   };
 };
 
-const handlePatch = async ({ dsl, instruction }: PatchArgs) => {
-  const result = await patchService({ dsl, instruction });
+const handleApplyPatch = async ({ dsl, ops }: ApplyPatchArgs) => {
+  const result = await applyPatchService({ dsl, ops });
   if (!result.ok) {
     return {
       isError: true,
-      content: [{ type: 'text' as const, text: formatErrorText(result) }],
+      content: [{ type: 'text' as const, text: formatApplyPatchErr(result) }],
     };
   }
   const summary =
-    `Applied ${result.applied.length} op(s), ${result.tokensUsed} tokens used.` +
+    `Applied ${result.applied.length} op(s).` +
     (result.applyWarnings.length > 0
       ? ` ${result.applyWarnings.length} apply-warning(s):\n` +
         result.applyWarnings.map((w) => `  ${w}`).join('\n')
@@ -106,12 +116,31 @@ const handlePatch = async ({ dsl, instruction }: PatchArgs) => {
 };
 
 export const buildMcpServer = (): McpServer => {
-  const server = new McpServer({ name: 'pixelagent', version: '0.1.0' });
+  const server = new McpServer({ name: 'pixelagent', version: '0.2.0' });
 
-  // The SDK's `registerTool` is deeply generic; passing zod schemas through
-  // its type machinery exceeds TS's instantiation depth limit. We cast the
-  // server to a loose registration type — runtime validation is unchanged
-  // (the SDK still parses each call's args against the declared schema).
+  server.registerResource(
+    'grammar',
+    'pixelagent://grammar',
+    {
+      title: 'PixelAgent DSL grammar reference',
+      description:
+        'Concise reference of DSL commands, validation rules, and patch op shape. Read this before generating ops or DSL.',
+      mimeType: 'text/markdown',
+    },
+    async (uri) => ({
+      contents: [
+        {
+          uri: uri.href,
+          mimeType: 'text/markdown',
+          text: GRAMMAR_REFERENCE,
+        },
+      ],
+    }),
+  );
+
+  // The SDK's registerTool is deeply generic; passing zod schemas through
+  // its type machinery exceeds TS's instantiation depth limit. We bind a
+  // loose-typed register at the boundary — runtime validation unchanged.
   const register = server.registerTool.bind(server) as (
     name: string,
     config: {
@@ -140,24 +169,60 @@ export const buildMcpServer = (): McpServer => {
     handlePreview as never,
   );
 
+  // Per-op zod shapes. Ops are applied in array order; the server validates
+  // each one against the target node type and skips bad ops with a warning.
+  const opSchema = z.discriminatedUnion('op', [
+    z.object({
+      op: z.literal('modify'),
+      id: z.string().min(1).describe('Target node id.'),
+      field: z
+        .string()
+        .min(1)
+        .describe(
+          "AST property to write — e.g. bg, color, label, variant, size, x, y, w, h. See pixelagent://grammar.",
+        ),
+      value: z
+        .union([z.string(), z.number()])
+        .describe('New value. String for color/enum/text, number for integer fields.'),
+    }),
+    z.object({
+      op: z.literal('add'),
+      parentId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Container to insert into. Omit to append at scene root.'),
+      node: z
+        .object({ type: z.string(), id: z.string().optional() })
+        .passthrough()
+        .describe('Full AST node, shape per pixelagent://grammar.'),
+    }),
+    z.object({
+      op: z.literal('remove'),
+      id: z.string().min(1).describe('Id of the node (and subtree) to delete.'),
+    }),
+  ]);
+
   register(
-    'pixelagent_patch',
+    'pixelagent_apply_patch',
     {
-      title: 'Patch DSL with natural-language instruction',
-      description: PATCH_DESCRIPTION,
+      title: 'Apply patch ops to DSL',
+      description: APPLY_PATCH_DESCRIPTION,
       inputSchema: {
-        dsl: z.string().min(1).describe('Current DSL source to patch.'),
-        instruction: z
+        dsl: z
           .string()
           .min(1)
-          .max(2000)
+          .describe('Current DSL source. Must parse cleanly.'),
+        ops: z
+          .array(opSchema)
+          .min(1)
+          .max(32)
           .describe(
-            'Natural-language edit, e.g. "change Sign in button color to green" ' +
-              'or "remove the password field".',
+            'Ordered patch operations. The server validates each op per node-type rules.',
           ),
       },
     },
-    handlePatch as never,
+    handleApplyPatch as never,
   );
 
   return server;

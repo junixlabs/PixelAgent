@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -14,14 +14,6 @@ vi.mock('@pixelagent/renderer', async (orig) => {
   };
 });
 
-const messagesCreate = vi.fn();
-vi.mock('@anthropic-ai/sdk', () => {
-  const Anthropic = vi.fn().mockImplementation(() => ({
-    messages: { create: messagesCreate },
-  }));
-  return { default: Anthropic };
-});
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const loginDsl = readFileSync(
   resolve(__dirname, '../../dsl-spec/examples/login.dsl'),
@@ -30,21 +22,15 @@ const loginDsl = readFileSync(
 
 const { buildMcpServer } = await import('../src/server.js');
 
-const ORIGINAL_KEY = process.env.ANTHROPIC_API_KEY;
-
-afterAll(() => {
-  if (ORIGINAL_KEY === undefined) delete process.env.ANTHROPIC_API_KEY;
-  else process.env.ANTHROPIC_API_KEY = ORIGINAL_KEY;
-});
+afterAll(() => {});
 
 const callTool = async (
   server: ReturnType<typeof buildMcpServer>,
   name: string,
   args: Record<string, unknown>,
 ) => {
-  // McpServer has a private `_registeredTools` map keyed by tool name; reach
-  // into it for unit-testing tool handlers without spinning up a full stdio
-  // transport. Tests assert on the same shape the SDK delivers.
+  // Reach into McpServer's internal tool map for unit testing without
+  // spinning up a stdio transport. Same response shape as the SDK delivers.
   const tools = (server as unknown as {
     _registeredTools: Record<string, { handler: Function }>;
   })._registeredTools;
@@ -53,21 +39,41 @@ const callTool = async (
   return tool.handler(args, {});
 };
 
-describe('MCP server', () => {
-  beforeEach(() => {
-    messagesCreate.mockReset();
-    process.env.ANTHROPIC_API_KEY = 'test-key';
-  });
+const readResource = async (
+  server: ReturnType<typeof buildMcpServer>,
+  uri: string,
+) => {
+  const resources = (server as unknown as {
+    _registeredResources: Record<string, { readCallback: Function }>;
+  })._registeredResources;
+  const resource = resources[uri];
+  if (!resource) throw new Error(`resource ${uri} not registered`);
+  return resource.readCallback(new URL(uri), {});
+};
 
-  it('registers pixelagent_preview and pixelagent_patch', () => {
+describe('MCP server — primitive tools (no LLM)', () => {
+  it('registers preview + apply_patch tools and grammar resource', () => {
     const server = buildMcpServer();
     const tools = (server as unknown as {
       _registeredTools: Record<string, unknown>;
     })._registeredTools;
     expect(Object.keys(tools).sort()).toEqual([
-      'pixelagent_patch',
+      'pixelagent_apply_patch',
       'pixelagent_preview',
     ]);
+    const resources = (server as unknown as {
+      _registeredResources: Record<string, unknown>;
+    })._registeredResources;
+    expect(Object.keys(resources)).toContain('pixelagent://grammar');
+  });
+
+  it('grammar resource returns the DSL reference', async () => {
+    const server = buildMcpServer();
+    const result = await readResource(server, 'pixelagent://grammar');
+    expect(Array.isArray(result.contents)).toBe(true);
+    expect(result.contents[0].mimeType).toBe('text/markdown');
+    expect(result.contents[0].text).toContain('PixelAgent DSL');
+    expect(result.contents[0].text).toContain('pixelagent_apply_patch');
   });
 
   it('preview returns image content for valid DSL', async () => {
@@ -76,11 +82,8 @@ describe('MCP server', () => {
       dsl: loginDsl,
     });
     expect(result.isError).toBeFalsy();
-    expect(Array.isArray(result.content)).toBe(true);
     const image = result.content.find((c: { type: string }) => c.type === 'image');
-    expect(image).toBeDefined();
     expect(image.mimeType).toBe('image/png');
-    expect(typeof image.data).toBe('string');
     expect(image.data.length).toBeGreaterThan(0);
   });
 
@@ -94,53 +97,70 @@ describe('MCP server', () => {
     expect(text.text).toContain('parse_failed');
   });
 
-  it('patch returns isError when LLM returns malformed JSON', async () => {
-    messagesCreate.mockResolvedValueOnce({
-      content: [{ type: 'text', text: 'not json' }],
-      usage: { input_tokens: 5, output_tokens: 5 },
-    });
+  it('apply_patch happy path: modify variant', async () => {
     const server = buildMcpServer();
-    const result = await callTool(server, 'pixelagent_patch', {
+    const result = await callTool(server, 'pixelagent_apply_patch', {
       dsl: loginDsl,
-      instruction: 'whatever',
-    });
-    expect(result.isError).toBe(true);
-    const text = result.content.find((c: { type: string }) => c.type === 'text');
-    expect(text.text).toContain('llm_invalid_output');
-  });
-
-  it('patch happy path returns image + new_dsl in text', async () => {
-    messagesCreate.mockResolvedValueOnce({
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify([
-            { op: 'modify', id: 'login-btn', field: 'variant', value: 'destructive' },
-          ]),
-        },
+      ops: [
+        { op: 'modify', id: 'login-btn', field: 'variant', value: 'destructive' },
       ],
-      usage: { input_tokens: 20, output_tokens: 8 },
-    });
-    const server = buildMcpServer();
-    const result = await callTool(server, 'pixelagent_patch', {
-      dsl: loginDsl,
-      instruction: 'make Sign in destructive',
     });
     expect(result.isError).toBeFalsy();
     const text = result.content.find((c: { type: string }) => c.type === 'text');
+    expect(text.text).toContain('Applied 1 op');
     expect(text.text).toContain('variant:destructive');
-    expect(text.text).toContain('28 tokens used');
+    const image = result.content.find((c: { type: string }) => c.type === 'image');
+    expect(image.mimeType).toBe('image/png');
   });
 
-  it('patch returns isError when ANTHROPIC_API_KEY unset', async () => {
-    delete process.env.ANTHROPIC_API_KEY;
+  it('apply_patch returns isError when all ops reference unknown ids', async () => {
     const server = buildMcpServer();
-    const result = await callTool(server, 'pixelagent_patch', {
+    const result = await callTool(server, 'pixelagent_apply_patch', {
       dsl: loginDsl,
-      instruction: 'whatever',
+      ops: [
+        { op: 'modify', id: 'ghost', field: 'bg', value: '#ff0000' },
+      ],
     });
     expect(result.isError).toBe(true);
     const text = result.content.find((c: { type: string }) => c.type === 'text');
-    expect(text.text).toContain('anthropic_api_key_missing');
+    expect(text.text).toContain('patch_no_op');
+  });
+
+  it('apply_patch returns isError when DSL fails to parse', async () => {
+    const server = buildMcpServer();
+    const result = await callTool(server, 'pixelagent_apply_patch', {
+      dsl: 'TOKEN x #fff\n',
+      ops: [{ op: 'modify', id: 'x', field: 'value', value: '#000' }],
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content.find((c: { type: string }) => c.type === 'text');
+    expect(text.text).toContain('parse_failed');
+  });
+
+  it('apply_patch supports remove + add ops', async () => {
+    const server = buildMcpServer();
+    const result = await callTool(server, 'pixelagent_apply_patch', {
+      dsl: loginDsl,
+      ops: [
+        { op: 'remove', id: 'pwd-input' },
+        {
+          op: 'add',
+          parentId: 'login-card',
+          node: {
+            type: 'text',
+            id: 'forgot',
+            x: 32,
+            y: 320,
+            text: 'Forgot password?',
+            size: 12,
+          },
+        },
+      ],
+    });
+    expect(result.isError).toBeFalsy();
+    const text = result.content.find((c: { type: string }) => c.type === 'text');
+    expect(text.text).toContain('Applied 2 op');
+    expect(text.text).toContain('forgot');
+    expect(text.text).not.toContain('pwd-input');
   });
 });

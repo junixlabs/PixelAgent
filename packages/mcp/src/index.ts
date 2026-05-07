@@ -12,9 +12,10 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { closeRenderer } from '@pixelagent/renderer';
 import { buildMcpServer } from './server.js';
 
-// Claude Code spawns this process without inheriting shell env, so we load
-// the project-root `.env` ourselves. Existing process.env wins so users
-// can still override per-host via the MCP config's `env` block.
+// Claude Code spawns this process without inheriting shell env. We load
+// the project-root `.env` ourselves so PORT / LOG_LEVEL etc. are honoured.
+// The MCP server itself does NOT call any LLM (host's Claude generates
+// patch ops); ANTHROPIC_API_KEY is not required.
 const here = dirname(fileURLToPath(import.meta.url));
 const envPath = resolve(here, '../../../.env');
 try {
@@ -29,9 +30,8 @@ try {
     const value = raw.replace(/^["']|["']$/g, '');
     if (!(key in process.env)) process.env[key] = value;
   }
-  process.stderr.write(`pixelagent-mcp: loaded env from ${envPath}\n`);
 } catch {
-  process.stderr.write(`pixelagent-mcp: no .env at ${envPath}, using process env only\n`);
+  // .env is optional — silent if absent.
 }
 
 const main = async (): Promise<void> => {
