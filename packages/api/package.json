@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@pixelagent/parser": "*",
+    "@pixelagent/renderer": "*",
     "fastify": "^5.2.0"
   }
 }
