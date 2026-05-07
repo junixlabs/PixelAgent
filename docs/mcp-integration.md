@@ -1,8 +1,8 @@
 # MCP Integration
 
 PixelAgent ships an MCP (Model Context Protocol) server that exposes
-preview + patch primitives as tools usable from any MCP host — Claude
-Code, Cursor, Claude Desktop, etc.
+preview + patch + synthesize primitives as tools usable from any MCP
+host — Claude Code, Cursor, Claude Desktop, etc.
 
 The server makes **no LLM calls of its own**. The host's model
 (Claude Code's Claude, Cursor's model, etc.) does the reasoning; the
@@ -48,6 +48,19 @@ response; later ops still apply against the partially-updated scene.
 - `image` block (PNG of the patched screen).
 - `text` block with apply count, warnings, and the new DSL.
 
+### `pixelagent_synthesize`
+Emit production code (React + Tailwind) from an approved DSL. Call
+this once the user is happy with what `preview` / `apply_patch`
+rendered — the codegen maps the AST deterministically, so the output
+matches the rendered pixels.
+
+**Input**
+- `dsl` (string, required) — DSL the user has approved.
+- `target` (enum, optional, default `"react"`) — code target.
+
+**Output**
+- `text` block: `Synthesized N chars of React code.\n\n<code>`.
+
 ## Resources
 
 ### `pixelagent://grammar`
@@ -75,8 +88,8 @@ cat <<EOF | ./node_modules/.bin/tsx packages/mcp/src/index.ts
 EOF
 ```
 
-Should print two responses, the second listing `pixelagent_preview`
-and `pixelagent_apply_patch`.
+Should print two responses, the second listing `pixelagent_preview`,
+`pixelagent_apply_patch`, and `pixelagent_synthesize`.
 
 ## Wire into Claude Code (project-scoped)
 
@@ -115,7 +128,7 @@ exact config file location.
                   │  pure services          │
                   │  previewService         │
                   │  applyPatchService      │
-                  │  patchService (HTTP-only, calls Anthropic)
+                  │  synthesizeService      │
                   └──────┬───────┬──────────┘
                          │       │
               ┌──────────┘       └──────────┐
@@ -124,16 +137,19 @@ exact config file location.
        │ HTTP routes  │              │ MCP server      │
        │ (Fastify)    │              │ (stdio JSON-RPC)│
        │ /preview     │              │ pixelagent_     │
-       │ /patch       │              │   preview       │
-       │ /apply-patch │              │ pixelagent_     │
-       │  (TODO)      │              │   apply_patch   │
+       │ /apply-patch │              │   preview       │
+       │ /synthesize  │              │ pixelagent_     │
+       │              │              │   apply_patch   │
+       │              │              │ pixelagent_     │
+       │              │              │   synthesize    │
        └──────────────┘              └─────────────────┘
 ```
 
-The MCP surface intentionally drops the LLM-driven `/patch` flow — when
-the host already has a model, the server should be primitives only.
-HTTP keeps `/patch` (instruction → Anthropic SDK → ops) for non-Claude
-clients (web frontends, scripts, services) that need a one-call API.
+Both transports call the same pure services — no LLM lives on the
+server. Hosts (Claude Code, Cursor, scripts) supply ops; PixelAgent
+validates, applies, and renders. When the user approves the DSL, the
+host calls `pixelagent_synthesize` (MCP) or `POST /synthesize` (HTTP)
+to get production code.
 
 ## Workflow inside Claude Code
 

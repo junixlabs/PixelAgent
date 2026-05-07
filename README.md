@@ -96,10 +96,11 @@ see [`docs/mcp-integration.md`](docs/mcp-integration.md).
 ## Status
 
 - **Phase 1** — Parser, renderer, HTTP `/preview` + `/apply-patch` +
-  `/patch`, MCP server (preview + apply_patch tools, grammar resource).
-  87/88 tests passing, hardened against LLM-malformed input.
-- **Phase 2** — Code synthesis (DSL → React / HTML / SwiftUI), CLI
-  binary, GitHub Actions CI.
+  `/synthesize`, MCP server (preview + apply_patch + synthesize tools,
+  grammar resource). All tests passing, hardened against LLM-malformed
+  input.
+- **Phase 2** — Additional codegen targets (HTML standalone, SwiftUI),
+  CLI binary, GitHub Actions CI.
 - **Phase 3** — Vision-verify, pixel-trace bidirectional, multi-target
   output.
 
@@ -219,15 +220,18 @@ pixelagent/
 │   │   │   └── id-buffer.ts       # Pixel→element trace
 │   │   └── tests/
 │   │
-│   ├── api/                       # HTTP/MCP API server
+│   ├── api/                       # HTTP API server (Fastify)
 │   │   ├── src/
-│   │   │   ├── server.ts          # Express/Fastify
+│   │   │   ├── server.ts
 │   │   │   ├── routes/
 │   │   │   │   ├── preview.ts     # POST /preview
-│   │   │   │   ├── patch.ts       # POST /patch
+│   │   │   │   ├── apply-patch.ts # POST /apply-patch
 │   │   │   │   └── synthesize.ts  # POST /synthesize
-│   │   │   └── mcp/               # MCP server wrapper
+│   │   │   └── services/          # pure service fns shared with MCP
 │   │   └── tests/
+│   │
+│   ├── mcp/                       # MCP stdio server
+│   │   └── src/                   # tools: preview / apply_patch / synthesize
 │   │
 │   └── codegen/                   # DSL → React/HTML/SwiftUI
 │       ├── src/
@@ -262,11 +266,11 @@ pixelagent/
   layout primitives.
 - [x] **Preview API** — `POST /preview { dsl } → { png_base64, render_ms, warnings }`.
 - [x] **Apply-patch API** — `POST /apply-patch { dsl, ops } → { png_base64, new_dsl, applied, warnings }`. No LLM call.
-- [x] **Patch API (LLM-driven)** — `POST /patch { dsl, instruction }`.
-  Calls Anthropic to generate ops, then runs the same apply pipeline.
-- [x] **MCP server** — `pixelagent_preview` and `pixelagent_apply_patch`
-  tools, `pixelagent://grammar` resource. No `ANTHROPIC_API_KEY`
-  needed; the host's model generates the ops.
+- [x] **Synthesize API** — `POST /synthesize { dsl, target: "react" } → { code, warnings }`. Deterministic AST → React + Tailwind.
+- [x] **MCP server** — `pixelagent_preview`, `pixelagent_apply_patch`,
+  and `pixelagent_synthesize` tools, plus `pixelagent://grammar`
+  resource. No `ANTHROPIC_API_KEY` needed; the host's model generates
+  the ops.
 
 ### Phase 2 — Production-ready (next)
 
@@ -358,53 +362,24 @@ fields (e.g. rejects `bg` on a `text` node, `weight: 'extra-bold'`,
 malformed `border`). Failed ops are skipped and reported in `warnings`;
 later ops still apply against the partially-updated scene.
 
-### `POST /patch`
-
-LLM-driven convenience route for non-Claude clients (web frontends,
-scripts). Calls Anthropic to generate ops from a natural-language
-instruction, then runs the same apply pipeline as `/apply-patch`.
-Requires `ANTHROPIC_API_KEY`.
-
-**Request:**
-```json
-{
-  "dsl": "...existing DSL...",
-  "instruction": "Change the Sign in button to green"
-}
-```
-
-**Response:**
-```json
-{
-  "new_dsl": "...updated DSL...",
-  "patch": [
-    { "op": "modify", "id": "login-btn", "field": "bg", "value": "#10B981" }
-  ],
-  "diff_png_base64": "...",
-  "tokens_used": 28
-}
-```
-
 ### `POST /synthesize`
 
-Generate final code from approved DSL.
+Generate final code from approved DSL. Stateless and LLM-free — the
+codegen maps the AST deterministically.
 
 **Request:**
 ```json
 {
   "dsl": "...final approved DSL...",
-  "target": "react-tailwind",
-  "mode": "adaptive"
+  "target": "react"
 }
 ```
 
 **Response:**
 ```json
 {
-  "code": "export default function LoginScreen() { return (...); }",
-  "files": [
-    { "path": "components/LoginScreen.tsx", "content": "..." }
-  ]
+  "code": "export default function GeneratedScreen() { return (...); }",
+  "warnings": []
 }
 ```
 

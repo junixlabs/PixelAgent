@@ -3,8 +3,11 @@ import { z } from 'zod';
 import {
   applyPatchService,
   previewService,
+  synthesizeService,
   type ApplyPatchErr,
   type PreviewErr,
+  type SynthesizeErr,
+  type SynthesizeTarget,
 } from '@pixelagent/api';
 import type { PatchOp } from '@pixelagent/parser';
 import { GRAMMAR_REFERENCE } from './grammar.js';
@@ -15,6 +18,7 @@ import { GRAMMAR_REFERENCE } from './grammar.js';
 // validation is still enforced by zod via the SDK.
 type PreviewArgs = { dsl: string; scale?: number };
 type ApplyPatchArgs = { dsl: string; ops: PatchOp[] };
+type SynthesizeArgs = { dsl: string; target?: SynthesizeTarget };
 
 const PREVIEW_DESCRIPTION =
   'Render a PixelAgent DSL string to a PNG bitmap preview. ' +
@@ -29,6 +33,13 @@ const APPLY_PATCH_DESCRIPTION =
   'field reference. The server validates each op per node-type rules and ' +
   'returns warnings for ops that did not apply.';
 
+const SYNTHESIZE_DESCRIPTION =
+  'Synthesize production code from a DSL the user has approved. Currently ' +
+  'emits a single React component using Tailwind classes (target:"react"). ' +
+  'Call this AFTER the user is happy with what `pixelagent_preview` / ' +
+  '`pixelagent_apply_patch` rendered — the DSL is the source of truth, the ' +
+  'generated code mirrors the rendered pixels deterministically.';
+
 const formatPreviewErr = (err: PreviewErr): string => {
   switch (err.kind) {
     case 'parse_failed':
@@ -39,6 +50,13 @@ const formatPreviewErr = (err: PreviewErr): string => {
     case 'render_failed':
       return `render_failed: ${err.message}`;
   }
+};
+
+const formatSynthesizeErr = (err: SynthesizeErr): string => {
+  return (
+    `parse_failed (${err.details.length} errors):\n` +
+    err.details.map((e) => `  line ${e.line ?? '?'}: ${e.message}`).join('\n')
+  );
 };
 
 const formatApplyPatchErr = (err: ApplyPatchErr): string => {
@@ -84,6 +102,31 @@ const handlePreview = async ({ dsl, scale }: PreviewArgs) => {
         mimeType: 'image/png',
       },
       { type: 'text' as const, text: summary },
+    ],
+  };
+};
+
+const handleSynthesize = async ({ dsl, target }: SynthesizeArgs) => {
+  const result = synthesizeService({ dsl, target: target ?? 'react' });
+  if (!result.ok) {
+    return {
+      isError: true,
+      content: [
+        { type: 'text' as const, text: formatSynthesizeErr(result) },
+      ],
+    };
+  }
+  const summary =
+    `Synthesized ${result.code.length} chars of React code.` +
+    (result.warnings.length > 0
+      ? ` ${result.warnings.length} validator warning(s):\n` +
+        result.warnings
+          .map((w) => `  line ${w.line ?? '?'}: ${w.message}`)
+          .join('\n')
+      : '');
+  return {
+    content: [
+      { type: 'text' as const, text: `${summary}\n\n${result.code}` },
     ],
   };
 };
@@ -202,6 +245,25 @@ export const buildMcpServer = (): McpServer => {
       id: z.string().min(1).describe('Id of the node (and subtree) to delete.'),
     }),
   ]);
+
+  register(
+    'pixelagent_synthesize',
+    {
+      title: 'Synthesize code from DSL',
+      description: SYNTHESIZE_DESCRIPTION,
+      inputSchema: {
+        dsl: z
+          .string()
+          .min(1)
+          .describe('Approved DSL source. Must parse cleanly.'),
+        target: z
+          .enum(['react'])
+          .optional()
+          .describe('Code target. Defaults to "react".'),
+      },
+    },
+    handleSynthesize as never,
+  );
 
   register(
     'pixelagent_apply_patch',

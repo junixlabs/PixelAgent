@@ -98,4 +98,13 @@ describe('tokenizer', () => {
     expect(layer?.line).toBe(2);
     expect(layer?.column).toBe(1);
   });
+
+  it("emits an educational error for '%' (CSS-style percent)", () => {
+    const r = tokenize('FILL 0 0 100% 100% #fff\n');
+    const pct = r.errors.find((e) => e.message.includes('%'));
+    expect(pct).toBeDefined();
+    expect(pct?.message).toContain('integer px');
+    expect(pct?.message).toContain("'1440'");
+    expect(pct?.rule).toBe('lex-error');
+  });
 });
