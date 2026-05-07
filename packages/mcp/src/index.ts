@@ -5,9 +5,34 @@
  * IMPORTANT: do NOT write anything to stdout outside the protocol. All
  * diagnostic output goes to stderr.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { closeRenderer } from '@pixelagent/renderer';
 import { buildMcpServer } from './server.js';
+
+// Claude Code spawns this process without inheriting shell env, so we load
+// the project-root `.env` ourselves. Existing process.env wins so users
+// can still override per-host via the MCP config's `env` block.
+const here = dirname(fileURLToPath(import.meta.url));
+const envPath = resolve(here, '../../../.env');
+try {
+  const text = readFileSync(envPath, 'utf-8');
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const raw = trimmed.slice(eq + 1).trim();
+    const value = raw.replace(/^["']|["']$/g, '');
+    if (!(key in process.env)) process.env[key] = value;
+  }
+  process.stderr.write(`pixelagent-mcp: loaded env from ${envPath}\n`);
+} catch {
+  process.stderr.write(`pixelagent-mcp: no .env at ${envPath}, using process env only\n`);
+}
 
 const main = async (): Promise<void> => {
   const server = buildMcpServer();
