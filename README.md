@@ -1,40 +1,89 @@
 # PixelAgent
 
-> Middleware giảm token cost cho AI coding agents khi build UI.
+> **DSL preview middleware that cuts AI-coding-agent token cost by ~90% during UI iteration.**
 
-**Status:** Pre-MVP, validation phase
-**Target users:** Developers đang dùng Claude Code, Cursor, Aider để build UI
-**Core value:** Giảm 85% token cost và 77% time trong UI iteration loop
+Coding agents (Claude Code, Cursor, Aider) burn tokens by emitting full
+React/HTML for every preview *and* every edit. PixelAgent inserts a
+typed DSL between the agent and the bitmap: the agent emits ~110-token
+DSL once, then ~30-token patch ops per edit. Same Chrome engine renders
+the preview, so visuals match what you'd ship.
+
+![Same screen, fewer tokens — vanilla agent vs PixelAgent](docs/images/hero-comparison.png)
+
+## Real numbers, real renders
+
+The screenshots below are **actual PNG output** from the renderer in
+this repo, captured by the `/preview` and `/apply-patch` HTTP endpoints
+running locally. Token counts use the standard 4-chars-per-token rule.
+
+![Edit flow — 1 draft + 2 follow-up edits, 89.6% saving over a 6-step session](docs/images/edit-flow.png)
+
+| | Vanilla coding agent | + PixelAgent | Saving |
+|---|---|---|---|
+| Initial draft (1 screen) | React + Tailwind component, ~416 tokens | DSL, ~110 tokens | **−74%** |
+| Single follow-up edit ("make Sign in red") | re-emit full component, ~416 tokens | 1 patch op, ~19 tokens | **−95%** |
+| Multi-edit (rename + placeholder + remove) | ~416 tokens | 3 patch ops, ~46 tokens | **−89%** |
+| **6-step session (1 draft + 5 edits)** | **~2,496 tokens** | **~260 tokens** | **−89.6%** |
+| Render latency | n/a (no preview) | 700ms cold, ~100ms warm | — |
+
+### Pixel-stable across edits
+
+| Initial draft | After 1 op (`variant: destructive`) | After 3 ops (rename, placeholder, drop password) |
+|:---:|:---:|:---:|
+| ![](docs/images/login-01-default.png) | ![](docs/images/login-02-destructive.png) | ![](docs/images/login-03-final.png) |
+| `~110 tokens DSL` | `~19 tokens (1 op)` | `~46 tokens (3 ops)` |
+
+Every unchanged element keeps its exact pixel position — no drift, no
+"Claude rewrote the button radius from 6px to 8px again". That's the
+hidden cost the table above doesn't capture.
 
 ---
 
-## Problem
+## Try it locally
+
+```bash
+git clone git@github.com:junixlabs/PixelAgent.git
+cd PixelAgent
+npm install
+npm run start --workspace=@pixelagent/api  # boots HTTP API on :3030
+```
+
+In another terminal, reproduce the demo above:
+
+```bash
+# Initial preview
+curl -sX POST localhost:3030/preview \
+  -H 'content-type: application/json' \
+  -d "{\"dsl\":\"$(cat packages/dsl-spec/examples/login.dsl | jq -Rs . | sed 's/^"//;s/"$//')\"}" \
+  | jq -r .png_base64 | base64 -d > preview.png
+
+# 1-op edit — change Sign in variant to destructive
+curl -sX POST localhost:3030/apply-patch \
+  -H 'content-type: application/json' \
+  -d '{"dsl":"...","ops":[{"op":"modify","id":"login-btn","field":"variant","value":"destructive"}]}' \
+  | jq -r .png_base64 | base64 -d > patched.png
+```
+
+Or wire it into Claude Code as an MCP server (no API key needed) —
+see [`docs/mcp-integration.md`](docs/mcp-integration.md).
+
+## Status
+
+- **Phase 1** — Parser, renderer, HTTP `/preview` + `/apply-patch` +
+  `/patch`, MCP server (preview + apply_patch tools, grammar resource).
+  87/88 tests passing, hardened against LLM-malformed input.
+- **Phase 2** — Code synthesis (DSL → React / HTML / SwiftUI), CLI
+  binary, GitHub Actions CI.
+- **Phase 3** — Vision-verify, pixel-trace bidirectional, multi-target
+  output.
+
+## Problem (the long version)
 
 Khi Claude Code, Cursor, hoặc bất kỳ coding agent nào build UI cho user, có 3 inefficiency lớn:
 
 1. **Preview tốn tài nguyên.** Coding agent muốn show preview phải sinh full code (~3000 tokens, 25-40 giây). User reject = waste hết.
 2. **Edit re-generate full code.** User nói "đổi nút xanh" → coding agent re-generate 100% component. 5 lần edit = 5× cost.
 3. **Inconsistency micro-details.** Coding agent sinh 3 buttons với spacing khác, 2 cards với border-radius khác. User phải tự spot và báo từng cái.
-
-### Token economics — số liệu thật
-
-Workflow build 1 screen với 3 vòng iteration:
-
-| Metric | Claude Code thuần | + PixelAgent | Saving |
-|---|---|---|---|
-| Total tokens | 12,000 | 1,800 | **85%** |
-| LLM cost (Sonnet 4) | $1.20 | $0.18 | **85%** |
-| Total time | 95s | 22s | **77%** |
-| Full re-generations | 3 | 1 | **66%** |
-| Code consistency | Manual check | Auto-enforced | — |
-
-### Scaling
-
-| Use case | Claude Code thuần | + PixelAgent | Saved |
-|---|---|---|---|
-| Indie dev (50 screens) | $60 | $9 | $51 |
-| Agency (200 screens) | $240 | $36 | $204 |
-| Enterprise (1000 screens) | $1,200 | $180 | $1,020 |
 
 ---
 
