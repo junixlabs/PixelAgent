@@ -7,5 +7,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@pixelagent/dsl-spec": "*",
+    "puppeteer": "^23.0.0"
+  },
+  "devDependencies": {
+    "@pixelagent/parser": "*"
   }
 }
