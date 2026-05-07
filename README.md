@@ -1,30 +1,56 @@
 # PixelAgent
 
-> **DSL preview middleware that cuts AI-coding-agent token cost by ~90% during UI iteration.**
+> **DSL preview middleware that cuts AI-coding-agent token cost by ~90% during UI iteration — and rises to −99% per follow-up edit.**
 
 Coding agents (Claude Code, Cursor, Aider) burn tokens by emitting full
 React/HTML for every preview *and* every edit. PixelAgent inserts a
-typed DSL between the agent and the bitmap: the agent emits ~110-token
-DSL once, then ~30-token patch ops per edit. Same Chrome engine renders
-the preview, so visuals match what you'd ship.
+typed DSL between the agent and the bitmap. Same Chrome engine renders
+the preview, so visuals match what you'd ship — but the agent only
+emits ~25-token patch ops per edit instead of re-generating the whole
+component.
 
-![Same screen, fewer tokens — vanilla agent vs PixelAgent](docs/images/hero-comparison.png)
+## Hero demo — a real SaaS dashboard
 
-## Real numbers, real renders
+Top nav, sidebar, four KPI cards with trend deltas, bar chart, activity
+feed, and a transactions table. The PNG below is the actual output of
+`POST /preview` in this repo — 138 lines of DSL → headless Chrome →
+PNG, end-to-end in ~335ms warm.
 
-The screenshots below are **actual PNG output** from the renderer in
-this repo, captured by the `/preview` and `/apply-patch` HTTP endpoints
-running locally. Token counts use the standard 4-chars-per-token rule.
+![Real SaaS dashboard rendered from 138 lines of DSL](docs/images/hero-dashboard.png)
+
+> The image above is a single-shot screenshot of the dashboard plus the
+> side-by-side React vs DSL source the agent would emit. Click to view
+> at full resolution.
+
+### Why the gap matters
+
+| Action on this dashboard | Vanilla coding agent | + PixelAgent | Saving |
+|---|---|---|---|
+| Initial render | ~2,200-token React + Tailwind component | ~1,650-token DSL | **−25%** |
+| "Make the Conversion KPI green again" | re-emit full component, ~2,200 tokens | 1 patch op, ~25 tokens | **−99%** |
+| "Swap the Avg-order card with a Returns metric" | re-emit, ~2,200 tokens | 3 patch ops, ~75 tokens | **−97%** |
+| **6-step session (1 draft + 5 edits)** | **~13,200 tokens** | **~1,775 tokens** | **−87%** |
+| Render latency | n/a (no preview) | 1.6s cold, ~330ms warm | — |
+
+Initial-draft savings are modest on a complex layout (both formats
+have to enumerate every element). The win compounds with every edit:
+patch ops stay ~constant regardless of screen complexity, while
+re-emitting a 2,200-token React component on each change scales
+linearly.
+
+## Smaller example — login screen, login flow
+
+For a simpler screen the savings show up immediately even on the
+initial draft, and edit-by-edit the gap is dramatic:
 
 ![Edit flow — 1 draft + 2 follow-up edits, 89.6% saving over a 6-step session](docs/images/edit-flow.png)
 
 | | Vanilla coding agent | + PixelAgent | Saving |
 |---|---|---|---|
-| Initial draft (1 screen) | React + Tailwind component, ~416 tokens | DSL, ~110 tokens | **−74%** |
-| Single follow-up edit ("make Sign in red") | re-emit full component, ~416 tokens | 1 patch op, ~19 tokens | **−95%** |
-| Multi-edit (rename + placeholder + remove) | ~416 tokens | 3 patch ops, ~46 tokens | **−89%** |
+| Initial draft (login) | React + Tailwind, ~416 tokens | DSL, ~110 tokens | **−74%** |
+| Single follow-up edit ("make Sign in red") | re-emit, ~416 tokens | 1 op, ~19 tokens | **−95%** |
+| Multi-edit (rename + placeholder + remove) | re-emit, ~416 tokens | 3 ops, ~46 tokens | **−89%** |
 | **6-step session (1 draft + 5 edits)** | **~2,496 tokens** | **~260 tokens** | **−89.6%** |
-| Render latency | n/a (no preview) | 700ms cold, ~100ms warm | — |
 
 ### Pixel-stable across edits
 
@@ -34,8 +60,8 @@ running locally. Token counts use the standard 4-chars-per-token rule.
 | `~110 tokens DSL` | `~19 tokens (1 op)` | `~46 tokens (3 ops)` |
 
 Every unchanged element keeps its exact pixel position — no drift, no
-"Claude rewrote the button radius from 6px to 8px again". That's the
-hidden cost the table above doesn't capture.
+"the model rewrote the button radius from 6px to 8px again". That's
+the hidden cost the token table doesn't capture.
 
 ---
 
@@ -79,17 +105,22 @@ see [`docs/mcp-integration.md`](docs/mcp-integration.md).
 
 ## Problem (the long version)
 
-Khi Claude Code, Cursor, hoặc bất kỳ coding agent nào build UI cho user, có 3 inefficiency lớn:
+When Claude Code, Cursor, or any coding agent builds UI, three inefficiencies compound:
 
-1. **Preview tốn tài nguyên.** Coding agent muốn show preview phải sinh full code (~3000 tokens, 25-40 giây). User reject = waste hết.
-2. **Edit re-generate full code.** User nói "đổi nút xanh" → coding agent re-generate 100% component. 5 lần edit = 5× cost.
-3. **Inconsistency micro-details.** Coding agent sinh 3 buttons với spacing khác, 2 cards với border-radius khác. User phải tự spot và báo từng cái.
+1. **Previews are expensive.** Showing a preview means emitting the full
+   code first (~3,000 tokens, 25–40 seconds). If the user rejects, all
+   that cost is wasted.
+2. **Edits re-generate the full component.** "Make the button blue"
+   triggers a 100% rewrite. Five edits = 5× the cost.
+3. **Micro-detail drift.** The agent silently emits three buttons with
+   different spacing, two cards with different border-radius. The human
+   has to spot and flag each one.
 
 ---
 
 ## Solution Architecture
 
-PixelAgent chạy 4 stage giữa coding agent và user:
+PixelAgent runs four stages between the coding agent and the user:
 
 ```
 Coding agent (Claude/GPT)
@@ -97,38 +128,40 @@ Coding agent (Claude/GPT)
        ▼
 ┌──────────────────────────────────────────────┐
 │  Stage 1: DSL Generation                     │
-│  Coding agent sinh DSL (~300 tokens)          │
-│  thay vì code (~3000 tokens)                  │
+│  Agent emits DSL (~300 tokens)               │
+│  instead of code (~3,000 tokens)             │
 └──────────────────┬───────────────────────────┘
                    │
                    ▼
 ┌──────────────────────────────────────────────┐
 │  Stage 2: Render Bitmap (zero LLM cost)      │
-│  DSL → HTML/CSS internal → Headless Chrome    │
-│  → PNG bitmap (~3 giây)                       │
+│  DSL → internal HTML/CSS → Headless Chrome   │
+│  → PNG bitmap (~3 seconds cold, <100ms warm) │
 └──────────────────┬───────────────────────────┘
                    │
                    ▼
 ┌──────────────────────────────────────────────┐
 │  Stage 3: Preview & Feedback                 │
-│  User xem PNG → Approve / Reject / Edit      │
+│  User sees PNG → Approve / Reject / Edit     │
 └──────────────────┬───────────────────────────┘
                    │
               Edit feedback
                    ▼
 ┌──────────────────────────────────────────────┐
-│  Stage 3.5: Surgical DSL Patch (key)         │
-│  Coding agent sinh patch (~30 tokens)         │
-│  PATCH login-btn bg:#10B981                   │
-│  Apply local, re-render. 100x rẻ hơn regen.   │
+│  Stage 3.5: Surgical DSL Patch (the key)     │
+│  Agent emits a patch op (~30 tokens)         │
+│  { op: 'modify', id: 'login-btn',            │
+│    field: 'bg', value: '#10B981' }           │
+│  Applied locally, re-rendered. 100× cheaper  │
+│  than re-generating the whole component.     │
 └──────────────────┬───────────────────────────┘
                    │
               User approves
                    ▼
 ┌──────────────────────────────────────────────┐
 │  Stage 4: Final Code Synthesis               │
-│  DSL final → React/HTML/SwiftUI              │
-│  CHỈ CHẠY 1 LẦN, không phải N lần             │
+│  DSL → React / HTML / SwiftUI                │
+│  Runs ONCE at the end — not N times.         │
 └──────────────────────────────────────────────┘
 ```
 
@@ -153,7 +186,7 @@ STATE login-btn hover
 END
 ```
 
-15 commands tổng cộng: SCREEN, TOKEN, FILL, RECT, TEXT, ICON, IMAGE, INPUT, BUTTON, LAYER, STACK, GRID, STATE, REPEAT, EFFECT.
+Fifteen commands total: SCREEN, TOKEN, FILL, RECT, TEXT, ICON, IMAGE, INPUT, BUTTON, LAYER, STACK, GRID, STATE, REPEAT, EFFECT.
 
 ---
 
@@ -218,56 +251,50 @@ pixelagent/
 
 ## Implementation Roadmap
 
-### Phase 1 — MVP Core (P0, 4-6 weeks)
+### Phase 1 — MVP core ✅ done
 
-**Goal:** End-to-end flow chạy được với 1 screen mẫu.
+**Goal:** end-to-end flow runs against the reference screens.
 
-- [ ] **DSL Parser** (`packages/parser`)
-  - Tokenizer: split commands, handle quoted strings
-  - Parser: build scene tree, resolve TOKEN references
-  - Validator: check SCREEN first line, block balance, ID uniqueness, child bounds
-  - Output: typed AST (`Scene IR`)
-- [ ] **Renderer** (`packages/renderer`)
-  - DSL AST → HTML/CSS string
-  - Headless Chrome (Puppeteer) → PNG bitmap
-  - Target latency: <5s per render
-  - Support: LAYER, STACK, GRID layout primitives
-- [ ] **Preview API** (`packages/api`)
-  - `POST /preview { dsl: string } → { png_base64, render_ms, errors[] }`
-  - Stateless, single endpoint
-- [ ] **Patch API**
-  - `POST /patch { dsl, instruction } → { new_dsl, diff_png }`
-  - Internally calls LLM to generate patch from instruction
-  - Apply patch to AST, re-render
+- [x] **DSL parser** (`packages/parser`) — tokenizer, parser, validator,
+  serializer, applyPatch with per-node-type field validation.
+- [x] **Renderer** (`packages/renderer`) — DSL → HTML/CSS → headless
+  Chrome → PNG. ~700ms cold, ~100ms warm. LAYER/STACK/GRID/REPEAT
+  layout primitives.
+- [x] **Preview API** — `POST /preview { dsl } → { png_base64, render_ms, warnings }`.
+- [x] **Apply-patch API** — `POST /apply-patch { dsl, ops } → { png_base64, new_dsl, applied, warnings }`. No LLM call.
+- [x] **Patch API (LLM-driven)** — `POST /patch { dsl, instruction }`.
+  Calls Anthropic to generate ops, then runs the same apply pipeline.
+- [x] **MCP server** — `pixelagent_preview` and `pixelagent_apply_patch`
+  tools, `pixelagent://grammar` resource. No `ANTHROPIC_API_KEY`
+  needed; the host's model generates the ops.
 
-### Phase 2 — Production-ready (P1, weeks 5-10)
+### Phase 2 — Production-ready (next)
 
-- [ ] **Consistency validator**
-  - Detect: spacing rhythm, TOKEN coverage, hover state coverage
-  - Output: warnings array với line numbers
 - [ ] **Code synthesis** (`packages/codegen`)
   - DSL AST → React + Tailwind component
   - DSL AST → HTML/CSS standalone
   - Pixel-locked vs adaptive output mode
-- [ ] **MCP server wrapper**
-  - Wrap APIs into MCP server
-  - Submit to Anthropic MCP marketplace
-  - Document Cursor/Claude Code setup
+- [ ] **CLI binary** — `pixelagent preview / apply-patch / synthesize`.
+- [ ] **Consistency validator**
+  - Detect: spacing rhythm, TOKEN coverage, hover-state coverage
+  - Output: warnings array with line numbers
+- [ ] **CI pipeline** — GitHub Actions running typecheck + tests on PR
+  and on push to `main`.
 - [ ] **Tests + benchmarks**
   - Visual regression: render → screenshot → diff
-  - Token cost benchmark vs raw Claude Code
+  - Real token cost benchmark vs raw Claude Code (replace estimates)
 
-### Phase 3 — Differentiation (P2, weeks 10+)
+### Phase 3 — Differentiation
 
 - [ ] **Vision verify (optional)**
   - Post-render check via Claude vision
-  - Detect alignment, color drift errors
-  - Cost-gated: chỉ chạy khi user opt-in
+  - Detect alignment + color-drift errors
+  - Cost-gated: opt-in only
 - [ ] **Pixel-trace bidirectional**
-  - ID buffer encode element ID trong alpha channel
-  - Click pixel → return element ID + DSL line
+  - ID buffer encodes element id in the alpha channel
+  - Click pixel → return element id + DSL line
 - [ ] **Multi-target output**
-  - SwiftUI generation (native iOS)
+  - SwiftUI (native iOS)
   - Jetpack Compose (Android)
 
 ---
@@ -290,23 +317,59 @@ Render DSL to PNG.
 ```json
 {
   "png_base64": "iVBORw0KGgoAAAANS...",
-  "render_ms": 2340,
-  "errors": [],
+  "render_ms": 117,
   "warnings": [
-    { "line": 12, "msg": "INPUT height 32px below 36px minimum" }
+    { "line": 12, "rule": "tap-target-min-height", "severity": "warning",
+      "message": "INPUT min height is 36px" }
   ]
 }
 ```
 
-### `POST /patch`
+### `POST /apply-patch`
 
-Apply natural-language edit to existing DSL.
+Apply pre-built patch ops to a DSL and re-render. **No LLM call** —
+the caller (typically the host's coding agent) provides the ops. This
+is the path the MCP server uses.
 
 **Request:**
 ```json
 {
   "dsl": "...existing DSL...",
-  "instruction": "Đổi màu nút Sign in thành xanh"
+  "ops": [
+    { "op": "modify", "id": "login-btn", "field": "variant", "value": "destructive" }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "new_dsl": "...updated DSL...",
+  "applied": [
+    { "op": "modify", "id": "login-btn", "field": "variant", "value": "destructive" }
+  ],
+  "png_base64": "iVBORw0KGgoAAAANS...",
+  "warnings": []
+}
+```
+
+The server validates each op against the target node type's writable
+fields (e.g. rejects `bg` on a `text` node, `weight: 'extra-bold'`,
+malformed `border`). Failed ops are skipped and reported in `warnings`;
+later ops still apply against the partially-updated scene.
+
+### `POST /patch`
+
+LLM-driven convenience route for non-Claude clients (web frontends,
+scripts). Calls Anthropic to generate ops from a natural-language
+instruction, then runs the same apply pipeline as `/apply-patch`.
+Requires `ANTHROPIC_API_KEY`.
+
+**Request:**
+```json
+{
+  "dsl": "...existing DSL...",
+  "instruction": "Change the Sign in button to green"
 }
 ```
 
@@ -458,56 +521,43 @@ Don't build full product yet. Validate problem first.
 
 ---
 
-## Quick Start (when implemented)
+## Roadmap items not yet built
 
-```bash
-# Install
-npm install -g @pixelagent/cli
-
-# Run as MCP server (for Claude Code)
-pixelagent mcp --port 3030
-
-# Or use directly
-pixelagent preview --input login.dsl --output preview.png
-
-# Patch existing DSL
-pixelagent patch \
-  --dsl login.dsl \
-  --instruction "make button green" \
-  --output login.dsl
-
-# Generate final code
-pixelagent synthesize \
-  --dsl login.dsl \
-  --target react-tailwind \
-  --output components/LoginScreen.tsx
-```
+- **CLI binary** — `pixelagent preview / apply-patch / synthesize`. The
+  HTTP API and MCP server expose the same primitives today; a CLI is
+  Phase 2.
+- **`@pixelagent/cli` npm package** — once the CLI lands, install with
+  `npm install -g @pixelagent/cli`.
+- **Codegen** — `POST /synthesize` is currently a stub returning 501.
+  DSL → React/Tailwind / HTML / SwiftUI is Phase 2.
 
 ---
 
 ## License
 
-MIT for DSL spec, parser, examples.
-Renderer service and hosted API: commercial license.
+MIT for the DSL spec, parser, and examples.
+The renderer service and hosted API are under a separate commercial
+license (TBD).
 
 ---
 
 ## Contributing
 
-Currently in pre-MVP validation phase. Not accepting contributions yet.
-Contact: [your-email] for early access or partnership.
+Phase 1 is complete and the architecture is settled. Issues and PRs
+are welcome — see [`docs/GITFLOW.md`](docs/GITFLOW.md) for the
+trunk-based-development workflow this repo follows.
 
 ---
 
 ## Resources
 
-- **DSL Spec:** `packages/dsl-spec/SPEC.md`
-- **API Docs:** `docs/api-reference.md`
-- **MCP Setup:** `docs/mcp-integration.md`
-- **Examples:** `examples/`
+- **DSL spec:** [`packages/dsl-spec/SPEC.md`](packages/dsl-spec/SPEC.md)
+- **MCP setup:** [`docs/mcp-integration.md`](docs/mcp-integration.md)
+- **Git workflow:** [`docs/GITFLOW.md`](docs/GITFLOW.md)
+- **Tech debt:** [`docs/tech-debt.md`](docs/tech-debt.md)
+- **Examples:** [`packages/dsl-spec/examples/`](packages/dsl-spec/examples/)
 
 ---
 
-**Last updated:** 2025-11-06
-**Maintainer:** [your-name]
-**Status:** Pre-MVP. Validating problem before full build.
+**Maintainer:** [@junixlabs](https://github.com/junixlabs)
+**Status:** Phase 1 complete. Phase 2 (codegen + CLI + CI) in flight.
