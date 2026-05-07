@@ -1,20 +1,25 @@
 {
-  "name": "@pixelagent/api",
+  "name": "@pixelagent/mcp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
+  "bin": {
+    "pixelagent-mcp": "./bin/pixelagent-mcp.mjs"
+  },
   "scripts": {
-    "dev": "tsx watch src/start.ts",
-    "start": "tsx src/start.ts",
+    "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.33.0",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@pixelagent/api": "*",
     "@pixelagent/parser": "*",
     "@pixelagent/renderer": "*",
-    "fastify": "^5.2.0",
     "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
   }
 }

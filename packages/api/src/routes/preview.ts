@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { parse } from '@pixelagent/parser';
-import { dslToHtml, render } from '@pixelagent/renderer';
+import { previewService } from '../services/preview.js';
 import { dslField } from '../schemas.js';
 
 const bodySchema = {
@@ -20,39 +19,26 @@ export const previewRoutes: FastifyPluginAsync = async (app) => {
     '/preview',
     { schema: { body: bodySchema } },
     async (req, reply) => {
-      const { dsl, scale = 1.0 } = req.body;
-
-      const { scene, warnings } = parse(dsl);
-      const errors = warnings.filter((w) => w.severity === 'error');
-      const warns = warnings.filter((w) => w.severity === 'warning');
-
-      if (errors.length > 0 || scene == null) {
+      const result = await previewService(req.body);
+      if (!result.ok) {
+        if (result.kind === 'parse_failed') {
+          req.log.warn({ count: result.details.length }, 'preview parse_failed');
+          return reply.code(422).send({
+            error: 'parse_failed',
+            details: result.details,
+            warnings: result.warnings,
+          });
+        }
+        req.log.error({ message: result.message }, 'render_failed');
         return reply
-          .code(422)
-          .send({ error: 'parse_failed', details: errors, warnings: warns });
+          .code(500)
+          .send({ error: 'render_failed', message: result.message });
       }
-
-      const start = performance.now();
-      try {
-        const html = dslToHtml(scene);
-        const png = await render(html, {
-          width: scene.screen.w,
-          height: scene.screen.h,
-          deviceScaleFactor: scale,
-        });
-        const render_ms = Math.round(performance.now() - start);
-        return reply.code(200).send({
-          png_base64: png.toString('base64'),
-          render_ms,
-          warnings: warns,
-        });
-      } catch (err) {
-        req.log.error({ err }, 'render failed');
-        return reply.code(500).send({
-          error: 'render_failed',
-          message: (err as Error).message,
-        });
-      }
+      return reply.code(200).send({
+        png_base64: result.png.toString('base64'),
+        render_ms: result.renderMs,
+        warnings: result.warnings,
+      });
     },
   );
 };
