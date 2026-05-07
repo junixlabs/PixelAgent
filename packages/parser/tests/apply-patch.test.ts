@@ -76,6 +76,72 @@ describe('applyPatch', () => {
     expect(JSON.stringify(result.scene)).toContain('"id":"extra"');
   });
 
+  it('modify: rejects invalid enum value (variant)', () => {
+    const { scene } = parse(loginDsl);
+    if (!scene) throw new Error('parse failed');
+    const result = applyPatch(scene, [
+      { op: 'modify', id: 'login-btn', field: 'variant', value: 'tertiary' },
+    ]);
+    expect(result.applied).toHaveLength(0);
+    expect(result.errors[0]).toMatch(/variant.*tertiary/);
+  });
+
+  it("modify: rejects field not writable on node type (bg on text)", () => {
+    const { scene } = parse(loginDsl);
+    if (!scene) throw new Error('parse failed');
+    const result = applyPatch(scene, [
+      { op: 'modify', id: 'brand', field: 'bg', value: '#ff0000' },
+    ]);
+    expect(result.applied).toHaveLength(0);
+    expect(result.errors[0]).toMatch(/'bg' not writable on 'text'/);
+  });
+
+  it('modify: strips wrapping quotes from string fields', () => {
+    const { scene } = parse(loginDsl);
+    if (!scene) throw new Error('parse failed');
+    const result = applyPatch(scene, [
+      { op: 'modify', id: 'email-input', field: 'placeholder', value: '"hello"' },
+    ]);
+    expect(result.errors).toEqual([]);
+    expect(JSON.stringify(result.scene)).toContain('"placeholder":"hello"');
+  });
+
+  it('modify: rewrites max-width alias to maxWidth', () => {
+    const { scene } = parse(loginDsl);
+    if (!scene) throw new Error('parse failed');
+    const result = applyPatch(scene, [
+      { op: 'modify', id: 'brand', field: 'max-width', value: 200 },
+    ]);
+    expect(result.errors).toEqual([]);
+    expect(JSON.stringify(result.scene)).toContain('"maxWidth":200');
+  });
+
+  it('add: rejects malformed node (missing type)', () => {
+    const { scene } = parse(loginDsl);
+    if (!scene) throw new Error('parse failed');
+    const result = applyPatch(scene, [
+      // @ts-expect-error — testing runtime guard against malformed LLM output
+      { op: 'add', parentId: 'login-card', node: { id: 'oops', x: 0, y: 0 } },
+    ]);
+    expect(result.applied).toHaveLength(0);
+    expect(result.errors[0]).toMatch(/invalid node type/);
+  });
+
+  it('add: rejects node missing required dimensions', () => {
+    const { scene } = parse(loginDsl);
+    if (!scene) throw new Error('parse failed');
+    const result = applyPatch(scene, [
+      {
+        op: 'add',
+        parentId: 'login-card',
+        // @ts-expect-error — testing runtime guard
+        node: { type: 'rect', id: 'r1', x: 0, y: 0 },
+      },
+    ]);
+    expect(result.applied).toHaveLength(0);
+    expect(result.errors[0]).toMatch(/rect\.w must be a number/);
+  });
+
   it('does not mutate the input scene', () => {
     const { scene } = parse(loginDsl);
     if (!scene) throw new Error('parse failed');

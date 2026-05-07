@@ -21,6 +21,21 @@ const ALIGN_FLEX: Record<string, string> = {
   right: 'flex-end',
 };
 
+// Layout & component defaults — keep here so changes don't require diffing
+// the whole renderer. The renderer is intentionally token-aware (CSS vars
+// for $primary etc.); these constants govern unstyled defaults the DSL
+// doesn't (yet) expose.
+const INPUT_LABEL_BLOCK_PX = 20;
+const INPUT_LABEL_FONT_PX = 12;
+const INPUT_LABEL_LINE_PX = 16;
+const INPUT_LABEL_GAP_PX = 4;
+const INPUT_LABEL_COLOR = '#374151';
+const ICON_DEFAULT_SIZE_PX = 16;
+const BUTTON_RADIUS_PX = 6;
+const IMAGE_PLACEHOLDER_BG = '#e5e7eb';
+const EFFECT_DEFAULT_SHADOW_COLOR = '#00000022';
+const EFFECT_DEFAULT_BLUR_RADIUS = 4;
+
 const escapeHtml = (s: string): string =>
   s
     .replace(/&/g, '&amp;')
@@ -64,6 +79,25 @@ const positionParts = (
   n: { x: number; y: number },
   positioned: boolean,
 ): string[] => (positioned ? [`left:${n.x}px`, `top:${n.y}px`] : []);
+
+/**
+ * Deep-clone a node subtree with `suffix` appended to every `id` and `targetId`.
+ * Used to materialize REPEAT iterations as distinct DOM elements without
+ * id collisions, while preserving the relative STATE/EFFECT wiring.
+ */
+const suffixIds = (n: Node, suffix: string): Node => {
+  const clone = structuredClone(n) as Node;
+  const visit = (x: Node): void => {
+    const obj = x as unknown as { id?: unknown; targetId?: unknown; children?: unknown };
+    if (typeof obj.id === 'string') obj.id = `${obj.id}${suffix}`;
+    if (typeof obj.targetId === 'string') obj.targetId = `${obj.targetId}${suffix}`;
+    if (Array.isArray(obj.children)) {
+      for (const c of obj.children as Node[]) visit(c);
+    }
+  };
+  visit(clone);
+  return clone;
+};
 
 const posCls = (positioned: boolean, extra?: string): string => {
   const base = positioned ? 'pa-abs' : 'pa-flow';
@@ -110,15 +144,15 @@ const emitEffectCss = (n: EffectNode): string => {
       const x = p.x ?? 0;
       const y = p.y ?? 0;
       const blur = p.blur ?? 0;
-      const color = colorOf(p.color, '#00000022');
+      const color = colorOf(p.color, EFFECT_DEFAULT_SHADOW_COLOR);
       return `#${id} { box-shadow: ${x}px ${y}px ${blur}px ${color} }`;
     }
     case 'blur': {
-      const r = p.radius ?? 4;
+      const r = p.radius ?? EFFECT_DEFAULT_BLUR_RADIUS;
       return `#${id} { filter: blur(${r}px) }`;
     }
     case 'overlay': {
-      const color = colorOf(p.color, '#00000022');
+      const color = colorOf(p.color, EFFECT_DEFAULT_SHADOW_COLOR);
       return `#${id} { position: relative }\n#${id}::after { content:''; position:absolute; inset:0; background:${color} }`;
     }
   }
@@ -162,7 +196,7 @@ const renderNode = (n: Node, positioned: boolean): string => {
       return `<span id="${escapeHtml(n.id)}" class="${posCls(positioned)}" style="${parts.join(';')}">${escapeHtml(n.text)}</span>`;
     }
     case 'icon': {
-      const size = n.size ?? 16;
+      const size = n.size ?? ICON_DEFAULT_SIZE_PX;
       const parts = positionParts(n, positioned);
       parts.push(`width:${size}px`, `height:${size}px`);
       if (n.color) parts.push(`background:${resolveColor(n.color)}`);
@@ -178,7 +212,7 @@ const renderNode = (n: Node, positioned: boolean): string => {
         fill: 'fill',
       };
       if (n.fit) parts.push(`object-fit:${fitMap[n.fit]}`);
-      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}" data-src="${escapeHtml(n.src)}" style="${parts.join(';')};background:#e5e7eb"></div>`;
+      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}" data-src="${escapeHtml(n.src)}" style="${parts.join(';')};background:${IMAGE_PLACEHOLDER_BG}"></div>`;
     }
     case 'input': {
       const inputType = n.inputType ?? 'text';
@@ -186,13 +220,16 @@ const renderNode = (n: Node, positioned: boolean): string => {
       const disabledAttr = n.state === 'disabled' ? ' disabled' : '';
       const placeholder = n.placeholder ? ` placeholder="${escapeHtml(n.placeholder)}"` : '';
       if (n.label) {
-        const labelBox = 20;
-        const inputH = Math.max(0, n.h - labelBox);
+        const inputH = Math.max(0, n.h - INPUT_LABEL_BLOCK_PX);
         const wrapParts = positionParts(n, positioned);
         wrapParts.push(`width:${n.w}px`, `height:${n.h}px`);
+        const labelStyle =
+          `display:block;font-size:${INPUT_LABEL_FONT_PX}px;` +
+          `line-height:${INPUT_LABEL_LINE_PX}px;` +
+          `margin-bottom:${INPUT_LABEL_GAP_PX}px;color:${INPUT_LABEL_COLOR}`;
         return (
           `<div class="${posCls(positioned)}" style="${wrapParts.join(';')}">` +
-          `<label style="display:block;font-size:12px;line-height:16px;margin-bottom:4px;color:#374151">${escapeHtml(n.label)}</label>` +
+          `<label style="${labelStyle}">${escapeHtml(n.label)}</label>` +
           `<input id="${escapeHtml(n.id)}" class="pa-input${stateClass}" type="${inputType}"${placeholder}${disabledAttr} style="display:block;width:100%;height:${inputH}px"/>` +
           `</div>`
         );
@@ -206,7 +243,7 @@ const renderNode = (n: Node, positioned: boolean): string => {
       const stateClass = n.state ? ` pa-state-${n.state}` : '';
       const disabledAttr = n.state === 'disabled' ? ' disabled' : '';
       const parts = positionParts(n, positioned);
-      parts.push(`width:${n.w}px`, `height:${n.h}px`, 'border-radius:6px');
+      parts.push(`width:${n.w}px`, `height:${n.h}px`, `border-radius:${BUTTON_RADIUS_PX}px`);
       return `<button id="${escapeHtml(n.id)}" class="${posCls(positioned, `pa-btn pa-btn-${variant}${stateClass}`)}"${disabledAttr} style="${parts.join(';')}">${escapeHtml(n.label)}</button>`;
     }
     case 'layer': {
@@ -235,11 +272,13 @@ const renderNode = (n: Node, positioned: boolean): string => {
       return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-grid')}" style="${parts.join(';')}">${inner}</div>`;
     }
     case 'repeat': {
-      const inner = n.children.map((c) => renderNode(c, false)).join('');
       const count = Math.max(1, n.count);
-      const stripped = inner.replace(/\sid="[^"]*"/g, '');
-      const body = count === 1 ? inner : inner + stripped.repeat(count - 1);
-      return `<div id="${escapeHtml(n.id)}" class="pa-flow">${body}</div>`;
+      const out: string[] = [];
+      for (let i = 0; i < count; i++) {
+        const subtree = i === 0 ? n.children : n.children.map((c) => suffixIds(c, `-${i}`));
+        for (const c of subtree) out.push(renderNode(c, false));
+      }
+      return `<div id="${escapeHtml(n.id)}" class="pa-flow">${out.join('')}</div>`;
     }
   }
 };

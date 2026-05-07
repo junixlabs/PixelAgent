@@ -1,6 +1,7 @@
 import type { Node, Scene } from '@pixelagent/dsl-spec';
 import type { ApplyPatchResult, PatchOp } from './types.js';
-import { type Container, isContainer, parseBorderRaw } from './helpers.js';
+import { type Container, isContainer } from './helpers.js';
+import { validateAddNode, validateModify } from './patch-validation.js';
 
 const getId = (n: Node): string | undefined => {
   if (n.type === 'fill') return undefined;
@@ -42,24 +43,12 @@ const applyModify = (
   value: string | number,
   errors: string[],
 ): boolean => {
-  if (field === 'border') {
-    if (node.type !== 'rect' && node.type !== 'layer') {
-      errors.push(`field 'border' not supported on ${node.type}`);
-      return false;
-    }
-    const b = typeof value === 'string' ? parseBorderRaw(value) : null;
-    if (!b) {
-      errors.push(`invalid border value '${value}'`);
-      return false;
-    }
-    node.border = b;
-    return true;
+  const result = validateModify(node.type, field, value);
+  if (!result.ok) {
+    errors.push(`modify '${field}' on ${node.type}: ${result.error}`);
+    return false;
   }
-  // Direct field assignment. Cast through `unknown` because the field name
-  // is dynamic — runtime safety relies on caller-supplied LLM ops being
-  // shape-correct, and the validator catching anything bogus on re-parse.
-  const obj = node as unknown as Record<string, unknown>;
-  obj[field] = value;
+  (node as unknown as Record<string, unknown>)[result.field] = result.value;
   return true;
 };
 
@@ -95,17 +84,22 @@ export const applyPatch = (scene: Scene, ops: PatchOp[]): ApplyPatchResult => {
       found.parent.splice(found.index, 1);
       applied.push(op);
     } else if (op.op === 'add') {
+      const validated = validateAddNode(op.node);
+      if (!validated.ok) {
+        errors.push(`add: ${validated.error}`);
+        continue;
+      }
       if (op.parentId) {
         const parent = findContainer(next.nodes, op.parentId);
         if (!parent) {
           errors.push(`add: parent id '${op.parentId}' not found`);
           continue;
         }
-        parent.children.push(op.node);
+        parent.children.push(validated.node);
       } else {
-        next.nodes.push(op.node);
+        next.nodes.push(validated.node);
       }
-      applied.push(op);
+      applied.push({ ...op, node: validated.node });
     }
   }
 

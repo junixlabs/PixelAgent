@@ -16,25 +16,32 @@ export class LlmInvalidOutputError extends Error {
   }
 }
 
+// Schema is structural-only — semantic validation (does the field exist on
+// this node type? is the value in the enum?) happens in `applyPatch`, which
+// owns the per-node-type rule table.
+const NodeShapeSchema = z
+  .object({ type: z.string(), id: z.string().optional(), targetId: z.string().optional() })
+  .passthrough();
+
 const PatchOpSchema: z.ZodType<PatchOp> = z.union([
   z.object({
     op: z.literal('modify'),
-    id: z.string(),
-    field: z.string(),
+    id: z.string().min(1),
+    field: z.string().min(1),
     value: z.union([z.string(), z.number()]),
   }),
   z.object({
     op: z.literal('remove'),
-    id: z.string(),
+    id: z.string().min(1),
   }),
   z.object({
     op: z.literal('add'),
-    parentId: z.string().optional(),
-    node: z.unknown(),
-  }) as z.ZodType<PatchOp>,
+    parentId: z.string().min(1).optional(),
+    node: NodeShapeSchema,
+  }) as unknown as z.ZodType<PatchOp>,
 ]);
 
-const PatchOpsSchema = z.array(PatchOpSchema);
+const PatchOpsSchema = z.array(PatchOpSchema).max(32);
 
 const SYSTEM_PROMPT =
   "You output ONLY a JSON array of patch ops. Schema: " +
@@ -72,13 +79,28 @@ export interface GeneratePatchOutput {
   tokensUsed: number;
 }
 
-const extractText = (
-  response: Anthropic.Messages.Message,
-): string => {
-  const parts = response.content
+const MAX_LLM_OUTPUT_CHARS = 8000;
+
+const extractText = (response: Anthropic.Messages.Message): string => {
+  const nonText = response.content.filter((b) => b.type !== 'text').length;
+  if (nonText > 0 && response.content.every((b) => b.type !== 'text')) {
+    throw new LlmInvalidOutputError(
+      `LLM returned no text blocks (${nonText} non-text blocks)`,
+      '',
+    );
+  }
+  const text = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
-    .map((b) => b.text);
-  return parts.join('').trim();
+    .map((b) => b.text)
+    .join('')
+    .trim();
+  if (text.length > MAX_LLM_OUTPUT_CHARS) {
+    throw new LlmInvalidOutputError(
+      `LLM output exceeds ${MAX_LLM_OUTPUT_CHARS} chars (${text.length})`,
+      text.slice(0, 200),
+    );
+  }
+  return text;
 };
 
 const stripFences = (s: string): string => {
@@ -101,13 +123,9 @@ export const generatePatchOps = async (
   const response = await client.messages.create({
     model: input.model ?? 'claude-sonnet-4-6',
     max_tokens: 256,
-    system: [
-      {
-        type: 'text',
-        text: SYSTEM_PROMPT,
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
+    // Prompt cache requires ≥1024 tokens of cached content; SYSTEM_PROMPT is
+    // ~80 tokens, so cache_control would not activate. Plain string system.
+    system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
   });
 

@@ -28,6 +28,21 @@ describe('dslToHtml', () => {
     expect(html).toContain('width:1440px;height:900px');
   });
 
+  it('REPEAT suffixes ids per iteration to avoid duplicates', () => {
+    const dsl = `SCREEN 800 600\nREPEAT row 3 direction:column gap:8\n  RECT cell 0 0 200 40 bg:#eee\nEND\n`;
+    const { scene } = parse(dsl);
+    expect(scene).not.toBeNull();
+    const html = dslToHtml(scene!);
+    // First iter keeps original id, subsequent get suffixed
+    expect(html).toContain('id="cell"');
+    expect(html).toContain('id="cell-1"');
+    expect(html).toContain('id="cell-2"');
+    // No id collision: each id appears in at most one element-opening position
+    const ids = [...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]);
+    const dups = ids.filter((id, i) => ids.indexOf(id) !== i);
+    expect(dups).toEqual([]);
+  });
+
   it('renders dashboard-card.dsl tokens and grid wrapper', () => {
     const { scene } = parse(loadDsl('dashboard-card.dsl'));
     expect(scene).not.toBeNull();

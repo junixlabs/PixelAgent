@@ -1,13 +1,14 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { parse } from '@pixelagent/parser';
 import { dslToHtml, render } from '@pixelagent/renderer';
+import { dslField } from '../schemas.js';
 
 const bodySchema = {
   type: 'object',
   required: ['dsl'],
   additionalProperties: false,
   properties: {
-    dsl: { type: 'string', minLength: 1 },
+    dsl: dslField,
     scale: { type: 'number', minimum: 0.1, maximum: 4, default: 1.0 },
   },
 } as const;
