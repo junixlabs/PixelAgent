@@ -74,6 +74,11 @@ const VALID_BUTTON_VARIANTS: ButtonVariant[] = [
   'ghost',
   'destructive',
 ];
+// Surface-only aliases. Normalized to the canonical variant before the AST
+// is built, so renderer/codegen never see the alias form.
+const BUTTON_VARIANT_ALIASES: Record<string, ButtonVariant> = {
+  danger: 'destructive',
+};
 const VALID_ELEMENT_STATES: ElementState[] = [
   'default',
   'hover',
@@ -435,8 +440,9 @@ function expectColor(
 
 /**
  * Reads kvinline pairs from the remainder of a line. Merges `border:N` followed
- * by a color token into a single raw value `N #color`, since `border:1 #ccc`
- * is one logical value but tokenizes as two tokens (whitespace-separated).
+ * by a color (hex or `$tokenref`) into a single raw value `N <color>`, since
+ * `border:1 #ccc` and `border:1 $border` are one logical value each but
+ * tokenize as two whitespace-separated tokens.
  */
 function readKvInline(
   toks: Token[],
@@ -451,9 +457,16 @@ function readKvInline(
     if (t.kind === 'kvinline') {
       let raw = t.raw;
       const next = toks[i + 1];
-      if (/^\d+$/.test(raw) && next && next.kind === 'color') {
-        raw = `${raw} ${next.value}`;
-        i += 2;
+      if (/^\d+$/.test(raw) && next) {
+        if (next.kind === 'color') {
+          raw = `${raw} ${next.value}`;
+          i += 2;
+        } else if (next.kind === 'tokenref') {
+          raw = `${raw} $${next.value}`;
+          i += 2;
+        } else {
+          i += 1;
+        }
       } else {
         i += 1;
       }
@@ -696,7 +709,8 @@ function parseButton(rest: Token[], line: number, errors: ValidationWarning[]): 
   const kvs = readKvInline(rest, 6, line, errors);
   const node: ButtonNode = { type: 'button', id, x, y, w, h, label };
   if (kvs.variant !== undefined) {
-    const v = checkEnum(kvs.variant, VALID_BUTTON_VARIANTS, 'variant', line, errors);
+    const canonical = BUTTON_VARIANT_ALIASES[kvs.variant] ?? kvs.variant;
+    const v = checkEnum(canonical, VALID_BUTTON_VARIANTS, 'variant', line, errors);
     if (v) node.variant = v;
   }
   if (kvs.state !== undefined) {

@@ -241,7 +241,7 @@ BUTTON <id> <x:int> <y:int> <w:int> <h:int> "<label>" [variant:ButtonVariant] [s
 
 | Param   | Required | Type | Default |
 |---------|----------|------|---------|
-| variant | no       | `primary` \| `secondary` \| `ghost` \| `destructive` | `primary` |
+| variant | no       | `primary` \| `secondary` \| `ghost` \| `destructive` (alias: `danger`) | `primary` |
 | state   | no       | `default` \| `hover` \| `focus` \| `active` \| `disabled` | `default` |
 
 Example:
