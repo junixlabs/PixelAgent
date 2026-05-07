@@ -81,6 +81,37 @@ describe('parser — happy paths', () => {
     });
   });
 
+  it("normalizes BUTTON variant alias 'danger' to canonical 'destructive'", () => {
+    const { scene, warnings } = parse(
+      [
+        'SCREEN 100 100',
+        'BUTTON a 0 0 100 48 "X" variant:danger',
+        'BUTTON b 0 60 100 48 "X" variant:destructive',
+        '',
+      ].join('\n'),
+    );
+    expect(warnings.filter((w) => w.severity === 'error')).toHaveLength(0);
+    expect(scene?.nodes[0]).toMatchObject({ type: 'button', variant: 'destructive' });
+    expect(scene?.nodes[1]).toMatchObject({ type: 'button', variant: 'destructive' });
+  });
+
+  it('accepts a token reference as the border color', () => {
+    const { scene, warnings } = parse(
+      [
+        'SCREEN 100 100',
+        'TOKEN border #e0e0e0',
+        'LAYER card 0 0 400 300 bg:#ffffff border:1 $border',
+        'END',
+        '',
+      ].join('\n'),
+    );
+    expect(warnings.filter((w) => w.severity === 'error')).toHaveLength(0);
+    expect(scene?.nodes[0]).toMatchObject({
+      type: 'layer',
+      border: { width: 1, color: '$border' },
+    });
+  });
+
   it('parses nested LAYER with children', () => {
     const { scene } = parse(
       [
