@@ -26,7 +26,7 @@ export const render = async (
   const page = await browser.newPage();
   try {
     await page.setViewport({ deviceScaleFactor: 1, ...viewport });
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(html, { waitUntil: 'load' });
     const buf = await page.screenshot({ type: 'png', fullPage: false });
     return Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
   } finally {

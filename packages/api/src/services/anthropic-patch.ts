@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Node, PatchOp, Scene } from '@pixelagent/parser';
+import { walkNodes, type PatchOp, type Scene } from '@pixelagent/parser';
 import { z } from 'zod';
 
 export class MissingApiKeyError extends Error {
@@ -44,30 +44,19 @@ const SYSTEM_PROMPT =
   "Common fields: bg, color, label, text, variant, size, weight, x, y, w, h, r. " +
   "Colors are hex like #10B981. No prose, no code fences, no explanation.";
 
-type ElementSummary = {
-  id: string;
-  type: string;
-  props: Record<string, unknown>;
-};
-
-const summarizeNode = (n: Node, out: ElementSummary[]): void => {
-  if (n.type === 'fill' || n.type === 'state' || n.type === 'effect') return;
-  const { type, id, ...rest } = n as { type: string; id: string } & Record<string, unknown>;
-  const props: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(rest)) {
-    if (k === 'children') continue;
-    props[k] = v;
-  }
-  out.push({ id, type, props });
-  if ('children' in n && Array.isArray(n.children)) {
-    for (const c of n.children) summarizeNode(c, out);
-  }
-};
-
 const summarizeScene = (scene: Scene): string => {
-  const items: ElementSummary[] = [];
-  for (const n of scene.nodes) summarizeNode(n, items);
-  return items.map((i) => `- ${i.type} ${i.id} ${JSON.stringify(i.props)}`).join('\n');
+  const lines: string[] = [];
+  walkNodes(scene.nodes, (n) => {
+    if (n.type === 'fill' || n.type === 'state' || n.type === 'effect') return;
+    const { type, id, ...rest } = n as { type: string; id: string } & Record<string, unknown>;
+    const props: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(rest)) {
+      if (k === 'children') continue;
+      props[k] = v;
+    }
+    lines.push(`- ${type} ${id} ${JSON.stringify(props)}`);
+  });
+  return lines.join('\n');
 };
 
 export interface GeneratePatchInput {

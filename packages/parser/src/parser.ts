@@ -30,6 +30,7 @@ import type {
 } from '@pixelagent/dsl-spec';
 import type { Token } from './types.js';
 import { tokenize } from './tokenizer.js';
+import { parseBorderRaw } from './helpers.js';
 
 // Annotate parsed nodes with their source line for validator diagnostics.
 // Stored as a non-IR property; consumers should ignore it.
@@ -475,8 +476,8 @@ function parseBorder(
   line: number,
   errors: ValidationWarning[],
 ): Border | null {
-  const parts = raw.trim().split(/\s+/);
-  if (parts.length !== 2) {
+  const b = parseBorderRaw(raw);
+  if (!b) {
     errors.push({
       rule: 'parse-error',
       line,
@@ -485,17 +486,7 @@ function parseBorder(
     });
     return null;
   }
-  const width = parseInt(parts[0], 10);
-  if (Number.isNaN(width)) {
-    errors.push({
-      rule: 'parse-error',
-      line,
-      message: `invalid border width '${parts[0]}'`,
-      severity: 'error',
-    });
-    return null;
-  }
-  return { width, color: parts[1] };
+  return b;
 }
 
 function checkEnum<T extends string>(

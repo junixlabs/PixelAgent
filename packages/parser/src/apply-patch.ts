@@ -1,13 +1,6 @@
-import type { Border, Node, Scene } from '@pixelagent/dsl-spec';
+import type { Node, Scene } from '@pixelagent/dsl-spec';
 import type { ApplyPatchResult, PatchOp } from './types.js';
-
-type Container = Extract<Node, { children: Node[] }>;
-
-const isContainer = (n: Node): n is Container =>
-  n.type === 'layer' ||
-  n.type === 'stack' ||
-  n.type === 'grid' ||
-  n.type === 'repeat';
+import { type Container, isContainer, parseBorderRaw } from './helpers.js';
 
 const getId = (n: Node): string | undefined => {
   if (n.type === 'fill') return undefined;
@@ -43,15 +36,6 @@ const findContainer = (nodes: Node[], id: string): Container | null => {
 
 const cloneScene = (scene: Scene): Scene => structuredClone(scene);
 
-const parseBorderValue = (value: string | number): Border | null => {
-  if (typeof value !== 'string') return null;
-  const parts = value.trim().split(/\s+/);
-  if (parts.length !== 2) return null;
-  const width = parseInt(parts[0], 10);
-  if (Number.isNaN(width)) return null;
-  return { width, color: parts[1] };
-};
-
 const applyModify = (
   node: Node,
   field: string,
@@ -63,7 +47,7 @@ const applyModify = (
       errors.push(`field 'border' not supported on ${node.type}`);
       return false;
     }
-    const b = parseBorderValue(value);
+    const b = typeof value === 'string' ? parseBorderRaw(value) : null;
     if (!b) {
       errors.push(`invalid border value '${value}'`);
       return false;

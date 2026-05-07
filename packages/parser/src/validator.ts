@@ -1,6 +1,5 @@
 import type {
   Scene,
-  Node,
   ButtonNode,
   InputNode,
   StackNode,
@@ -10,6 +9,7 @@ import type {
   ValidationWarning,
 } from '@pixelagent/dsl-spec';
 import { getNodeLine } from './parser.js';
+import { walkNodes } from './helpers.js';
 
 // rule no-op stubs (documented):
 //   - rect-no-children: structurally impossible — RectNode has no children field.
@@ -120,18 +120,4 @@ export function validate(scene: Scene): ValidationWarning[] {
   });
 
   return warnings;
-}
-
-function walkNodes(nodes: Node[], visit: (n: Node) => void): void {
-  for (const node of nodes) {
-    visit(node);
-    if (
-      node.type === 'layer' ||
-      node.type === 'stack' ||
-      node.type === 'grid' ||
-      node.type === 'repeat'
-    ) {
-      walkNodes((node as { children: Node[] }).children, visit);
-    }
-  }
 }

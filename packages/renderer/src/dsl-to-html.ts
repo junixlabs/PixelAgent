@@ -60,6 +60,16 @@ const overrideCss = (key: string, value: string | number): string | null => {
   }
 };
 
+const positionParts = (
+  n: { x: number; y: number },
+  positioned: boolean,
+): string[] => (positioned ? [`left:${n.x}px`, `top:${n.y}px`] : []);
+
+const posCls = (positioned: boolean, extra?: string): string => {
+  const base = positioned ? 'pa-abs' : 'pa-flow';
+  return extra ? `${base} ${extra}` : base;
+};
+
 const stateSelector = (id: string, state: ElementState): string => {
   switch (state) {
     case 'default':
@@ -135,42 +145,31 @@ const renderNode = (n: Node, positioned: boolean): string => {
       return `<div class="pa-abs" style="${style}"></div>`;
     }
     case 'rect': {
-      const parts: string[] = [];
-      if (positioned) {
-        parts.push(`left:${n.x}px`, `top:${n.y}px`);
-      }
+      const parts = positionParts(n, positioned);
       parts.push(`width:${n.w}px`, `height:${n.h}px`);
       if (n.bg) parts.push(`background:${resolveColor(n.bg)}`);
       if (n.r !== undefined) parts.push(`border-radius:${n.r}px`);
       if (n.border) parts.push(`border:${borderCss(n.border)}`);
-      const cls = positioned ? 'pa-abs' : 'pa-flow';
-      return `<div id="${escapeHtml(n.id)}" class="${cls}" style="${parts.join(';')}"></div>`;
+      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned)}" style="${parts.join(';')}"></div>`;
     }
     case 'text': {
-      const parts: string[] = [];
-      if (positioned) parts.push(`left:${n.x}px`, `top:${n.y}px`);
+      const parts = positionParts(n, positioned);
       if (n.size !== undefined) parts.push(`font-size:${n.size}px`);
       if (n.weight) parts.push(`font-weight:${WEIGHT_MAP[n.weight]}`);
       if (n.color) parts.push(`color:${resolveColor(n.color)}`);
-      if (n.maxWidth !== undefined) {
-        parts.push(`width:${n.maxWidth}px`);
-      }
+      if (n.maxWidth !== undefined) parts.push(`width:${n.maxWidth}px`);
       if (n.align) parts.push(`text-align:${n.align}`);
-      const cls = positioned ? 'pa-abs' : 'pa-flow';
-      return `<span id="${escapeHtml(n.id)}" class="${cls}" style="${parts.join(';')}">${escapeHtml(n.text)}</span>`;
+      return `<span id="${escapeHtml(n.id)}" class="${posCls(positioned)}" style="${parts.join(';')}">${escapeHtml(n.text)}</span>`;
     }
     case 'icon': {
       const size = n.size ?? 16;
-      const parts: string[] = [];
-      if (positioned) parts.push(`left:${n.x}px`, `top:${n.y}px`);
+      const parts = positionParts(n, positioned);
       parts.push(`width:${size}px`, `height:${size}px`);
       if (n.color) parts.push(`background:${resolveColor(n.color)}`);
-      const cls = positioned ? 'pa-abs pa-icon' : 'pa-flow pa-icon';
-      return `<span id="${escapeHtml(n.id)}" class="${cls}" data-icon="${escapeHtml(n.name)}" style="${parts.join(';')}"></span>`;
+      return `<span id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-icon')}" data-icon="${escapeHtml(n.name)}" style="${parts.join(';')}"></span>`;
     }
     case 'image': {
-      const parts: string[] = [];
-      if (positioned) parts.push(`left:${n.x}px`, `top:${n.y}px`);
+      const parts = positionParts(n, positioned);
       parts.push(`width:${n.w}px`, `height:${n.h}px`);
       if (n.r !== undefined) parts.push(`border-radius:${n.r}px`);
       const fitMap: Record<string, string> = {
@@ -179,8 +178,7 @@ const renderNode = (n: Node, positioned: boolean): string => {
         fill: 'fill',
       };
       if (n.fit) parts.push(`object-fit:${fitMap[n.fit]}`);
-      const cls = positioned ? 'pa-abs pa-image' : 'pa-flow pa-image';
-      return `<div id="${escapeHtml(n.id)}" class="${cls}" data-src="${escapeHtml(n.src)}" style="${parts.join(';')};background:#e5e7eb"></div>`;
+      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}" data-src="${escapeHtml(n.src)}" style="${parts.join(';')};background:#e5e7eb"></div>`;
     }
     case 'input': {
       const inputType = n.inputType ?? 'text';
@@ -190,63 +188,51 @@ const renderNode = (n: Node, positioned: boolean): string => {
       if (n.label) {
         const labelBox = 20;
         const inputH = Math.max(0, n.h - labelBox);
-        const wrapStyle = positioned
-          ? `left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px`
-          : `width:${n.w}px;height:${n.h}px`;
-        const wrapCls = positioned ? 'pa-abs' : 'pa-flow';
+        const wrapParts = positionParts(n, positioned);
+        wrapParts.push(`width:${n.w}px`, `height:${n.h}px`);
         return (
-          `<div class="${wrapCls}" style="${wrapStyle}">` +
+          `<div class="${posCls(positioned)}" style="${wrapParts.join(';')}">` +
           `<label style="display:block;font-size:12px;line-height:16px;margin-bottom:4px;color:#374151">${escapeHtml(n.label)}</label>` +
           `<input id="${escapeHtml(n.id)}" class="pa-input${stateClass}" type="${inputType}"${placeholder}${disabledAttr} style="display:block;width:100%;height:${inputH}px"/>` +
           `</div>`
         );
       }
-      const parts: string[] = [];
-      if (positioned) parts.push(`left:${n.x}px`, `top:${n.y}px`);
+      const parts = positionParts(n, positioned);
       parts.push(`width:${n.w}px`, `height:${n.h}px`);
-      const cls = positioned ? 'pa-abs pa-input' : 'pa-flow pa-input';
-      return `<input id="${escapeHtml(n.id)}" class="${cls}${stateClass}" type="${inputType}"${placeholder}${disabledAttr} style="${parts.join(';')}"/>`;
+      return `<input id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-input')}${stateClass}" type="${inputType}"${placeholder}${disabledAttr} style="${parts.join(';')}"/>`;
     }
     case 'button': {
       const variant = n.variant ?? 'primary';
       const stateClass = n.state ? ` pa-state-${n.state}` : '';
       const disabledAttr = n.state === 'disabled' ? ' disabled' : '';
-      const parts: string[] = [];
-      if (positioned) parts.push(`left:${n.x}px`, `top:${n.y}px`);
+      const parts = positionParts(n, positioned);
       parts.push(`width:${n.w}px`, `height:${n.h}px`, 'border-radius:6px');
-      const cls = positioned ? 'pa-abs pa-btn' : 'pa-flow pa-btn';
-      return `<button id="${escapeHtml(n.id)}" class="${cls} pa-btn-${variant}${stateClass}"${disabledAttr} style="${parts.join(';')}">${escapeHtml(n.label)}</button>`;
+      return `<button id="${escapeHtml(n.id)}" class="${posCls(positioned, `pa-btn pa-btn-${variant}${stateClass}`)}"${disabledAttr} style="${parts.join(';')}">${escapeHtml(n.label)}</button>`;
     }
     case 'layer': {
-      const parts: string[] = [];
-      if (positioned) parts.push(`left:${n.x}px`, `top:${n.y}px`);
+      const parts = positionParts(n, positioned);
       parts.push(`width:${n.w}px`, `height:${n.h}px`);
       if (n.bg) parts.push(`background:${resolveColor(n.bg)}`);
       if (n.r !== undefined) parts.push(`border-radius:${n.r}px`);
       if (n.border) parts.push(`border:${borderCss(n.border)}`);
       const inner = n.children.map((c) => renderNode(c, true)).join('');
-      const cls = positioned ? 'pa-abs' : 'pa-flow';
-      return `<div id="${escapeHtml(n.id)}" class="${cls}" style="${parts.join(';')}">${inner}</div>`;
+      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned)}" style="${parts.join(';')}">${inner}</div>`;
     }
     case 'stack': {
       const direction = n.direction ?? 'row';
-      const parts: string[] = [];
-      if (positioned) parts.push(`left:${n.x}px`, `top:${n.y}px`);
+      const parts = positionParts(n, positioned);
       parts.push(`flex-direction:${direction}`);
       if (n.gap !== undefined) parts.push(`gap:${n.gap}px`);
       if (n.align) parts.push(`align-items:${ALIGN_FLEX[n.align]}`);
       const inner = n.children.map((c) => renderNode(c, false)).join('');
-      const cls = positioned ? 'pa-abs pa-stack' : 'pa-flow pa-stack';
-      return `<div id="${escapeHtml(n.id)}" class="${cls}" style="${parts.join(';')}">${inner}</div>`;
+      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-stack')}" style="${parts.join(';')}">${inner}</div>`;
     }
     case 'grid': {
-      const parts: string[] = [];
-      if (positioned) parts.push(`left:${n.x}px`, `top:${n.y}px`);
+      const parts = positionParts(n, positioned);
       parts.push(`width:${n.w}px`, `grid-template-columns:repeat(${n.columns},1fr)`);
       if (n.gap !== undefined) parts.push(`gap:${n.gap}px`);
       const inner = n.children.map((c) => renderNode(c, false)).join('');
-      const cls = positioned ? 'pa-abs pa-grid' : 'pa-flow pa-grid';
-      return `<div id="${escapeHtml(n.id)}" class="${cls}" style="${parts.join(';')}">${inner}</div>`;
+      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-grid')}" style="${parts.join(';')}">${inner}</div>`;
     }
     case 'repeat': {
       const inner = n.children.map((c) => renderNode(c, false)).join('');

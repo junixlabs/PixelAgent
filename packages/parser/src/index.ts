@@ -27,6 +27,7 @@ export { validate } from './validator.js';
 export { buildScene } from './parser.js';
 export { applyPatch } from './apply-patch.js';
 export { serialize } from './serialize.js';
+export { isContainer, walkNodes, parseBorderRaw, type Container } from './helpers.js';
 export type {
   Scene,
   Node,

@@ -26,7 +26,9 @@ export const previewRoutes: FastifyPluginAsync = async (app) => {
       const warns = warnings.filter((w) => w.severity === 'warning');
 
       if (errors.length > 0 || scene == null) {
-        return reply.code(400).send({ errors, warnings: warns });
+        return reply
+          .code(422)
+          .send({ error: 'parse_failed', details: errors, warnings: warns });
       }
 
       const start = performance.now();
@@ -41,13 +43,12 @@ export const previewRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(200).send({
           png_base64: png.toString('base64'),
           render_ms,
-          errors: [],
           warnings: warns,
         });
       } catch (err) {
         req.log.error({ err }, 'render failed');
         return reply.code(500).send({
-          error: 'render failed',
+          error: 'render_failed',
           message: (err as Error).message,
         });
       }

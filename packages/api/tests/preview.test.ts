@@ -32,23 +32,23 @@ describe('POST /preview', () => {
       expect(typeof body.png_base64).toBe('string');
       expect(body.png_base64.length).toBeGreaterThan(0);
       expect(body.render_ms).toBeGreaterThan(0);
-      expect(body.errors).toEqual([]);
       expect(Array.isArray(body.warnings)).toBe(true);
     },
     30_000,
   );
 
-  it('returns 400 when DSL has no SCREEN', async () => {
+  it('returns 422 parse_failed when DSL has no SCREEN', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/preview',
       payload: { dsl: 'TOKEN primary #185FA5\n' },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(422);
     const body = res.json();
-    expect(Array.isArray(body.errors)).toBe(true);
-    expect(body.errors.length).toBeGreaterThan(0);
-    const text = JSON.stringify(body.errors).toLowerCase();
+    expect(body.error).toBe('parse_failed');
+    expect(Array.isArray(body.details)).toBe(true);
+    expect(body.details.length).toBeGreaterThan(0);
+    const text = JSON.stringify(body.details).toLowerCase();
     expect(text).toContain('screen');
     expect(body.png_base64).toBeUndefined();
   });
