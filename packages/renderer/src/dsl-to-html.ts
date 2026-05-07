@@ -273,12 +273,15 @@ const renderNode = (n: Node, positioned: boolean): string => {
     }
     case 'repeat': {
       const count = Math.max(1, n.count);
+      const direction = n.direction ?? 'column';
+      const styleParts = [`flex-direction:${direction}`];
+      if (n.gap !== undefined) styleParts.push(`gap:${n.gap}px`);
       const out: string[] = [];
       for (let i = 0; i < count; i++) {
         const subtree = i === 0 ? n.children : n.children.map((c) => suffixIds(c, `-${i}`));
         for (const c of subtree) out.push(renderNode(c, false));
       }
-      return `<div id="${escapeHtml(n.id)}" class="pa-flow">${out.join('')}</div>`;
+      return `<div id="${escapeHtml(n.id)}" class="pa-flow pa-stack" style="${styleParts.join(';')}">${out.join('')}</div>`;
     }
   }
 };

@@ -43,6 +43,23 @@ describe('dslToHtml', () => {
     expect(dups).toEqual([]);
   });
 
+  it('REPEAT applies direction + gap as flex layout (regression)', () => {
+    const dsl = `SCREEN 800 600\nREPEAT row 3 direction:column gap:8\n  RECT cell 0 0 200 40 bg:#eee\nEND\n`;
+    const { scene } = parse(dsl);
+    const html = dslToHtml(scene!);
+    // Wrapper is a flex container so iterations stack instead of overlapping.
+    expect(html).toMatch(
+      /<div id="row" class="pa-flow pa-stack" style="flex-direction:column;gap:8px"/,
+    );
+  });
+
+  it('REPEAT defaults direction to column when not specified', () => {
+    const dsl = `SCREEN 800 600\nREPEAT row 2\n  RECT cell 0 0 200 40 bg:#eee\nEND\n`;
+    const { scene } = parse(dsl);
+    const html = dslToHtml(scene!);
+    expect(html).toMatch(/style="flex-direction:column"/);
+  });
+
   it('renders dashboard-card.dsl tokens and grid wrapper', () => {
     const { scene } = parse(loadDsl('dashboard-card.dsl'));
     expect(scene).not.toBeNull();
