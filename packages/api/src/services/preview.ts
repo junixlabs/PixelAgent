@@ -1,5 +1,6 @@
 import { parse, type ValidationWarning } from '@pixelagent/parser';
 import { dslToHtml, render } from '@pixelagent/renderer';
+import { mergeProjectTokens } from './load-tokens-dsl.js';
 
 export type PreviewOk = {
   ok: true;
@@ -27,7 +28,8 @@ export type PreviewInput = { dsl: string; scale?: number };
 export const previewService = async (
   input: PreviewInput,
 ): Promise<PreviewOk | PreviewErr> => {
-  const { scene, warnings } = parse(input.dsl);
+  const merged = await mergeProjectTokens(input.dsl);
+  const { scene, warnings } = parse(merged);
   const errors = warnings.filter((w) => w.severity === 'error');
   const warns = warnings.filter((w) => w.severity === 'warning');
 
