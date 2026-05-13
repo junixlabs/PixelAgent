@@ -79,6 +79,47 @@ const formatApplyPatchErr = (err: ApplyPatchErr): string => {
   }
 };
 
+const applyOutPath = async (
+  png: Buffer,
+  outPath: string | undefined,
+  summary: string,
+): Promise<
+  | { ok: true; text: string }
+  | {
+      ok: false;
+      response: {
+        isError: true;
+        content: [{ type: 'text'; text: string }];
+      };
+    }
+> => {
+  if (!outPath) return { ok: true, text: summary };
+  try {
+    const written = await writePng(png, outPath);
+    return { ok: true, text: `${summary}\nWrote PNG to ${written}` };
+  } catch (e) {
+    return {
+      ok: false,
+      response: {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `outPath_failed: ${(e as Error).message}`,
+          },
+        ],
+      },
+    };
+  }
+};
+
+const pngImageBlock = (png: Buffer) =>
+  ({
+    type: 'image' as const,
+    data: png.toString('base64'),
+    mimeType: 'image/png',
+  }) as const;
+
 const handlePreview = async ({ dsl, scale, outPath }: PreviewArgs) => {
   const result = await previewService({ dsl, scale });
   if (!result.ok) {
@@ -95,33 +136,12 @@ const handlePreview = async ({ dsl, scale, outPath }: PreviewArgs) => {
           .map((w) => `  line ${w.line ?? '?'}: ${w.message}`)
           .join('\n')
       : '');
-  let writtenPath: string | null = null;
-  if (outPath) {
-    try {
-      writtenPath = await writePng(result.png, outPath);
-    } catch (e) {
-      return {
-        isError: true,
-        content: [
-          {
-            type: 'text' as const,
-            text: `outPath_failed: ${(e as Error).message}`,
-          },
-        ],
-      };
-    }
-  }
-  const finalText = writtenPath
-    ? `${summary}\nWrote PNG to ${writtenPath}`
-    : summary;
+  const out = await applyOutPath(result.png, outPath, summary);
+  if (!out.ok) return out.response;
   return {
     content: [
-      {
-        type: 'image' as const,
-        data: result.png.toString('base64'),
-        mimeType: 'image/png',
-      },
-      { type: 'text' as const, text: finalText },
+      pngImageBlock(result.png),
+      { type: 'text' as const, text: out.text },
     ],
   };
 };
@@ -166,33 +186,12 @@ const handleApplyPatch = async ({ dsl, ops, outPath }: ApplyPatchArgs) => {
         result.applyWarnings.map((w) => `  ${w}`).join('\n')
       : '') +
     `\n\nNew DSL:\n${result.newDsl}`;
-  let writtenPath: string | null = null;
-  if (outPath) {
-    try {
-      writtenPath = await writePng(result.png, outPath);
-    } catch (e) {
-      return {
-        isError: true,
-        content: [
-          {
-            type: 'text' as const,
-            text: `outPath_failed: ${(e as Error).message}`,
-          },
-        ],
-      };
-    }
-  }
-  const finalText = writtenPath
-    ? `${summary}\nWrote PNG to ${writtenPath}`
-    : summary;
+  const out = await applyOutPath(result.png, outPath, summary);
+  if (!out.ok) return out.response;
   return {
     content: [
-      {
-        type: 'image' as const,
-        data: result.png.toString('base64'),
-        mimeType: 'image/png',
-      },
-      { type: 'text' as const, text: finalText },
+      pngImageBlock(result.png),
+      { type: 'text' as const, text: out.text },
     ],
   };
 };
