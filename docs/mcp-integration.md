@@ -21,6 +21,7 @@ Render a DSL string to a PNG bitmap. Use for the initial draft of a screen.
 **Input**
 - `dsl` (string, required) — PixelAgent DSL source. Must start with `SCREEN`.
 - `scale` (number, optional, 0.1–4.0, default 1.0) — device scale factor.
+- `outPath` (string, optional) — absolute file path (no `..` segments, must end with `.png`). When set, the rendered PNG is also written to disk at this path and the text block reports `Wrote PNG to <path>`. Invalid paths return an MCP error with prefix `outPath_failed:`; no file is written. See [Viewing previews on a terminal host](#viewing-previews-on-a-terminal-host).
 
 **Output**
 - `image` block (PNG, base64, `image/png`).
@@ -38,6 +39,7 @@ costs ~10× fewer tokens and preserves identity of unchanged elements.
   - `{ op: 'modify', id, field, value }`
   - `{ op: 'add', parentId?, node }`
   - `{ op: 'remove', id }`
+- `outPath` (string, optional) — same semantics as `pixelagent_preview.outPath` above.
 
 The server validates each op against the target node type's writable
 fields (e.g. rejects `bg` on a `text` node, `weight: 'extra-bold'`,
@@ -164,6 +166,24 @@ When you ask Claude to build or edit a screen:
 
 No PixelAgent server-side LLM call ever happens. All reasoning is in
 the Claude session you already opened.
+
+## Viewing previews on a terminal host
+
+Terminal MCP hosts (e.g. Claude Code in a plain TTY without inline-image rendering) cannot display the `image` content block — only the model sees it. Use the `outPath` parameter to write the PNG to disk and open it with the OS image viewer:
+
+```
+pixelagent_preview({ dsl: "...", outPath: "/tmp/pa.png" })
+```
+
+then once, in another terminal:
+
+```bash
+open /tmp/pa.png    # macOS — Preview.app
+xdg-open /tmp/pa.png  # Linux
+start /tmp/pa.png   # Windows
+```
+
+**Tip — Playwright-style live refresh.** Use a single fixed path (e.g. `/tmp/pa.png`) for every preview/patch call in a session. macOS Preview.app and most modern image viewers detect the file rewrite and refresh the open window in place — no need to re-open between iterations. The PixelAgent server intentionally does not spawn the viewer itself; that's a host-side action that's easy to control and skip on headless environments (SSH, CI, containers without `DISPLAY`).
 
 ## Troubleshooting
 
