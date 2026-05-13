@@ -1,7 +1,12 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const tmpPng = () => join(tmpdir(), `pa-${randomUUID()}.png`);
 
 vi.mock('@pixelagent/renderer', async (orig) => {
   const actual = await orig<typeof import('@pixelagent/renderer')>();
@@ -168,6 +173,94 @@ describe('MCP server — primitive tools (no LLM)', () => {
     const text = result.content.find((c: { type: string }) => c.type === 'text');
     expect(text.text).toContain('parse_failed');
   });
+
+  it('preview writes PNG to outPath when provided', async () => {
+    const server = buildMcpServer();
+    const outPath = tmpPng();
+    try {
+      const result = await callTool(server, 'pixelagent_preview', {
+        dsl: loginDsl,
+        outPath,
+      });
+      expect(result.isError).toBeFalsy();
+      const image = result.content.find(
+        (c: { type: string }) => c.type === 'image',
+      );
+      expect(image.mimeType).toBe('image/png');
+      const text = result.content.find(
+        (c: { type: string }) => c.type === 'text',
+      );
+      expect(text.text).toContain(`Wrote PNG to ${outPath}`);
+      const bytes = readFileSync(outPath);
+      expect(Array.from(bytes.subarray(0, 8))).toEqual(PNG_MAGIC);
+    } finally {
+      if (existsSync(outPath)) unlinkSync(outPath);
+    }
+  });
+
+  it('apply_patch writes PNG to outPath when provided', async () => {
+    const server = buildMcpServer();
+    const outPath = tmpPng();
+    try {
+      const result = await callTool(server, 'pixelagent_apply_patch', {
+        dsl: loginDsl,
+        ops: [
+          { op: 'modify', id: 'login-btn', field: 'variant', value: 'destructive' },
+        ],
+        outPath,
+      });
+      expect(result.isError).toBeFalsy();
+      const image = result.content.find(
+        (c: { type: string }) => c.type === 'image',
+      );
+      expect(image.mimeType).toBe('image/png');
+      const text = result.content.find(
+        (c: { type: string }) => c.type === 'text',
+      );
+      expect(text.text).toContain(`Wrote PNG to ${outPath}`);
+      const bytes = readFileSync(outPath);
+      expect(Array.from(bytes.subarray(0, 8))).toEqual(PNG_MAGIC);
+    } finally {
+      if (existsSync(outPath)) unlinkSync(outPath);
+    }
+  });
+
+  it.each([
+    { label: 'relative path', outPath: './foo.png', expect: 'must be absolute' },
+    { label: 'parent traversal', outPath: '/tmp/../etc/foo.png', expect: '..' },
+    { label: 'wrong extension', outPath: '/tmp/foo.jpg', expect: '.png' },
+  ])('preview rejects invalid outPath ($label)', async ({ outPath, expect: needle }) => {
+    const server = buildMcpServer();
+    const result = await callTool(server, 'pixelagent_preview', {
+      dsl: loginDsl,
+      outPath,
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content.find(
+      (c: { type: string }) => c.type === 'text',
+    );
+    expect(text.text).toContain('outPath_failed');
+    expect(text.text).toContain(needle);
+    expect(existsSync(outPath)).toBe(false);
+  });
+
+  it.runIf(process.platform !== 'win32')(
+    'preview surfaces FS error when parent dir cannot be created',
+    async () => {
+      const server = buildMcpServer();
+      const outPath = '/dev/null/sub/foo.png';
+      const result = await callTool(server, 'pixelagent_preview', {
+        dsl: loginDsl,
+        outPath,
+      });
+      expect(result.isError).toBe(true);
+      const text = result.content.find(
+        (c: { type: string }) => c.type === 'text',
+      );
+      expect(text.text).toContain('outPath_failed');
+      expect(existsSync(outPath)).toBe(false);
+    },
+  );
 
   it('apply_patch supports remove + add ops', async () => {
     const server = buildMcpServer();
