@@ -19,7 +19,7 @@ export const synthesizeRoutes: FastifyPluginAsync = async (app) => {
     '/synthesize',
     { schema: { body: bodySchema } },
     async (req, reply) => {
-      const result = synthesizeService(req.body);
+      const result = await synthesizeService(req.body);
       if (!result.ok) {
         return reply
           .code(422)

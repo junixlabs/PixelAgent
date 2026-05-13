@@ -107,7 +107,7 @@ const handlePreview = async ({ dsl, scale }: PreviewArgs) => {
 };
 
 const handleSynthesize = async ({ dsl, target }: SynthesizeArgs) => {
-  const result = synthesizeService({ dsl, target: target ?? 'react' });
+  const result = await synthesizeService({ dsl, target: target ?? 'react' });
   if (!result.ok) {
     return {
       isError: true,

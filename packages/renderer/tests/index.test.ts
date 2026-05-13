@@ -60,6 +60,71 @@ describe('dslToHtml', () => {
     expect(html).toMatch(/style="flex-direction:column"/);
   });
 
+  it('injects Google Fonts (Inter) link and sets Inter as the default font-family', () => {
+    const { scene } = parse(loadDsl('login.dsl'));
+    const html = dslToHtml(scene!);
+    expect(html).toContain(
+      'fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700',
+    );
+    expect(html).toMatch(/font-family:\s*Inter,/i);
+  });
+
+  it('emits <img src> for IMAGE nodes with a real URL (no grey placeholder bg)', () => {
+    const dsl = `SCREEN 400 300\nIMAGE hero 0 0 400 300 "https://picsum.photos/400/300" fit:cover\n`;
+    const { scene } = parse(dsl);
+    const html = dslToHtml(scene!);
+    expect(html).toMatch(
+      /<img id="hero"[^>]*src="https:\/\/picsum\.photos\/400\/300"[^>]*>/,
+    );
+    // Should NOT carry the placeholder grey background on the real-src branch
+    const heroFragment = /<img id="hero"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? '';
+    expect(heroFragment).not.toContain('#e5e7eb');
+    expect(heroFragment).toContain('object-fit:cover');
+  });
+
+  it('falls back to grey placeholder <div> when IMAGE has empty src', () => {
+    const dsl = `SCREEN 400 300\nIMAGE empty 0 0 400 300 "placeholder.png"\n`;
+    const { scene } = parse(dsl);
+    // Simulate empty/missing src to exercise placeholder branch
+    const img = scene!.nodes.find((n) => n.type === 'image');
+    if (img && img.type === 'image') img.src = '';
+    const html = dslToHtml(scene!);
+    expect(html).toMatch(/<div id="empty"[^>]*background:#e5e7eb"/);
+    expect(html).not.toMatch(/<img id="empty"/);
+  });
+
+  it('TEXT align:center without maxWidth gets width:100% (auto-wrap)', () => {
+    const dsl =
+      `SCREEN 800 600\nLAYER l 0 0 400 100\n  TEXT t 0 0 "some longer headline that should wrap" align:center\nEND\n`;
+    const { scene } = parse(dsl);
+    expect(scene).not.toBeNull();
+    const html = dslToHtml(scene!);
+    const spanStyle = /<span id="t"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? '';
+    expect(spanStyle).toContain('text-align:center');
+    expect(spanStyle).toContain('width:100%');
+  });
+
+  it('TEXT with explicit max-width keeps fixed width (regression)', () => {
+    const dsl =
+      `SCREEN 800 600\nLAYER l 0 0 400 100\n  TEXT t 0 0 "headline" align:center max-width:300\nEND\n`;
+    const { scene } = parse(dsl);
+    expect(scene).not.toBeNull();
+    const html = dslToHtml(scene!);
+    const spanStyle = /<span id="t"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? '';
+    expect(spanStyle).toContain('width:300px');
+    expect(spanStyle).not.toContain('width:100%');
+  });
+
+  it('TEXT align:left without maxWidth does NOT get width style', () => {
+    const dsl =
+      `SCREEN 800 600\nLAYER l 0 0 400 100\n  TEXT t 0 0 "left text" align:left\nEND\n`;
+    const { scene } = parse(dsl);
+    expect(scene).not.toBeNull();
+    const html = dslToHtml(scene!);
+    const spanStyle = /<span id="t"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? '';
+    expect(spanStyle).not.toMatch(/width:/);
+  });
+
   it('renders dashboard-card.dsl tokens and grid wrapper', () => {
     const { scene } = parse(loadDsl('dashboard-card.dsl'));
     expect(scene).not.toBeNull();

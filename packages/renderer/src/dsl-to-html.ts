@@ -192,6 +192,7 @@ const renderNode = (n: Node, positioned: boolean): string => {
       if (n.weight) parts.push(`font-weight:${WEIGHT_MAP[n.weight]}`);
       if (n.color) parts.push(`color:${resolveColor(n.color)}`);
       if (n.maxWidth !== undefined) parts.push(`width:${n.maxWidth}px`);
+      else if (n.align === 'center' || n.align === 'right') parts.push('width:100%');
       if (n.align) parts.push(`text-align:${n.align}`);
       return `<span id="${escapeHtml(n.id)}" class="${posCls(positioned)}" style="${parts.join(';')}">${escapeHtml(n.text)}</span>`;
     }
@@ -212,7 +213,10 @@ const renderNode = (n: Node, positioned: boolean): string => {
         fill: 'fill',
       };
       if (n.fit) parts.push(`object-fit:${fitMap[n.fit]}`);
-      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}" data-src="${escapeHtml(n.src)}" style="${parts.join(';')};background:${IMAGE_PLACEHOLDER_BG}"></div>`;
+      if (n.src) {
+        return `<img id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}" src="${escapeHtml(n.src)}" style="${parts.join(';')}"/>`;
+      }
+      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}" style="${parts.join(';')};background:${IMAGE_PLACEHOLDER_BG}"></div>`;
     }
     case 'input': {
       const inputType = n.inputType ?? 'text';
@@ -288,7 +292,7 @@ const renderNode = (n: Node, positioned: boolean): string => {
 
 const baseCss = `
 *,*::before,*::after { box-sizing: border-box; }
-html,body { margin:0; padding:0; background:#fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#111; }
+html,body { margin:0; padding:0; background:#fff; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#111; }
 .pa-screen { position: relative; overflow: hidden; }
 .pa-abs    { position: absolute; }
 .pa-flow   { position: relative; }
@@ -318,6 +322,7 @@ export const dslToHtml = (scene: Scene): string => {
 <html>
 <head>
 <meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
 ${tokenDecls}
