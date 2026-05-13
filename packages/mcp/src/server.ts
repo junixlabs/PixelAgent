@@ -11,13 +11,14 @@ import {
 } from '@pixelagent/api';
 import type { PatchOp } from '@pixelagent/parser';
 import { GRAMMAR_REFERENCE } from './grammar.js';
+import { writePng } from './write-png.js';
 
 // The SDK's `registerTool` is generic over the input schema and produces a
 // callback type too deep for TS to resolve through our shapes. We type the
 // args explicitly and cast the callback at the SDK boundary; runtime
 // validation is still enforced by zod via the SDK.
-type PreviewArgs = { dsl: string; scale?: number };
-type ApplyPatchArgs = { dsl: string; ops: PatchOp[] };
+type PreviewArgs = { dsl: string; scale?: number; outPath?: string };
+type ApplyPatchArgs = { dsl: string; ops: PatchOp[]; outPath?: string };
 type SynthesizeArgs = { dsl: string; target?: SynthesizeTarget };
 
 const PREVIEW_DESCRIPTION =
@@ -78,7 +79,48 @@ const formatApplyPatchErr = (err: ApplyPatchErr): string => {
   }
 };
 
-const handlePreview = async ({ dsl, scale }: PreviewArgs) => {
+const applyOutPath = async (
+  png: Buffer,
+  outPath: string | undefined,
+  summary: string,
+): Promise<
+  | { ok: true; text: string }
+  | {
+      ok: false;
+      response: {
+        isError: true;
+        content: [{ type: 'text'; text: string }];
+      };
+    }
+> => {
+  if (!outPath) return { ok: true, text: summary };
+  try {
+    const written = await writePng(png, outPath);
+    return { ok: true, text: `${summary}\nWrote PNG to ${written}` };
+  } catch (e) {
+    return {
+      ok: false,
+      response: {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `outPath_failed: ${(e as Error).message}`,
+          },
+        ],
+      },
+    };
+  }
+};
+
+const pngImageBlock = (png: Buffer) =>
+  ({
+    type: 'image' as const,
+    data: png.toString('base64'),
+    mimeType: 'image/png',
+  }) as const;
+
+const handlePreview = async ({ dsl, scale, outPath }: PreviewArgs) => {
   const result = await previewService({ dsl, scale });
   if (!result.ok) {
     return {
@@ -94,14 +136,12 @@ const handlePreview = async ({ dsl, scale }: PreviewArgs) => {
           .map((w) => `  line ${w.line ?? '?'}: ${w.message}`)
           .join('\n')
       : '');
+  const out = await applyOutPath(result.png, outPath, summary);
+  if (!out.ok) return out.response;
   return {
     content: [
-      {
-        type: 'image' as const,
-        data: result.png.toString('base64'),
-        mimeType: 'image/png',
-      },
-      { type: 'text' as const, text: summary },
+      pngImageBlock(result.png),
+      { type: 'text' as const, text: out.text },
     ],
   };
 };
@@ -131,7 +171,7 @@ const handleSynthesize = async ({ dsl, target }: SynthesizeArgs) => {
   };
 };
 
-const handleApplyPatch = async ({ dsl, ops }: ApplyPatchArgs) => {
+const handleApplyPatch = async ({ dsl, ops, outPath }: ApplyPatchArgs) => {
   const result = await applyPatchService({ dsl, ops });
   if (!result.ok) {
     return {
@@ -146,14 +186,12 @@ const handleApplyPatch = async ({ dsl, ops }: ApplyPatchArgs) => {
         result.applyWarnings.map((w) => `  ${w}`).join('\n')
       : '') +
     `\n\nNew DSL:\n${result.newDsl}`;
+  const out = await applyOutPath(result.png, outPath, summary);
+  if (!out.ok) return out.response;
   return {
     content: [
-      {
-        type: 'image' as const,
-        data: result.png.toString('base64'),
-        mimeType: 'image/png',
-      },
-      { type: 'text' as const, text: summary },
+      pngImageBlock(result.png),
+      { type: 'text' as const, text: out.text },
     ],
   };
 };
@@ -207,6 +245,12 @@ export const buildMcpServer = (): McpServer => {
           .max(4)
           .optional()
           .describe('Device scale factor for the rendered PNG. Default 1.0.'),
+        outPath: z
+          .string()
+          .optional()
+          .describe(
+            'Optional absolute file path. When set, the rendered PNG is also written to disk at this path. Must be absolute, contain no ".." segments, and end with .png.',
+          ),
       },
     },
     handlePreview as never,
@@ -281,6 +325,12 @@ export const buildMcpServer = (): McpServer => {
           .max(32)
           .describe(
             'Ordered patch operations. The server validates each op per node-type rules.',
+          ),
+        outPath: z
+          .string()
+          .optional()
+          .describe(
+            'Optional absolute file path. When set, the rendered PNG is also written to disk at this path. Must be absolute, contain no ".." segments, and end with .png.',
           ),
       },
     },
