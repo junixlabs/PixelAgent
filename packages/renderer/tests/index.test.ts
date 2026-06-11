@@ -125,6 +125,21 @@ describe('dslToHtml', () => {
     expect(spanStyle).not.toMatch(/width:/);
   });
 
+  it('theme:dark sets canvas bg/fg on .pa-screen and ghost inherits foreground', () => {
+    const dsl = `SCREEN 800 600 theme:dark\nBUTTON g 10 10 120 40 "Ghost" variant:ghost\n`;
+    const { scene } = parse(dsl);
+    expect(scene).not.toBeNull();
+    const html = dslToHtml(scene!);
+    expect(html).toContain('.pa-screen { background:#111827; color:#E5E7EB; }');
+    expect(html).toMatch(/\.pa-btn-ghost\s*\{[^}]*color:\s*inherit/);
+  });
+
+  it('theme:light emits no dark canvas block (regression)', () => {
+    const { scene } = parse(loadDsl('login.dsl'));
+    const html = dslToHtml(scene!);
+    expect(html).not.toContain('#111827');
+  });
+
   it('omits the inspector overlay by default (PNG path stays byte-stable)', () => {
     const { scene } = parse(loadDsl('login.dsl'));
     const html = dslToHtml(scene!);

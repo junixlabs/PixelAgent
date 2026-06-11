@@ -329,12 +329,17 @@ html,body { margin:0; padding:0; background:#fff; font-family: Inter, -apple-sys
 .pa-btn    { border: 0; cursor: pointer; font-size: 14px; font-weight: 500; }
 .pa-btn-primary    { background: var(--primary, #185FA5); color: #fff; }
 .pa-btn-secondary  { background: #e5e7eb; color: #111; }
-.pa-btn-ghost      { background: transparent; color: #111; }
+.pa-btn-ghost      { background: transparent; color: inherit; }
 .pa-btn-destructive{ background: #dc2626; color: #fff; }
 .pa-input { border: 1px solid #d1d5db; border-radius: 8px; padding: 0 12px; font-size: 14px; outline: none; background: #fff; color: #111; }
 .pa-input:focus { border-color: var(--primary, #185FA5); }
 .pa-icon  { display: inline-block; mask-image: var(--icon, none); }
 `.trim();
+
+// theme:dark canvas defaults. Scoped to .pa-screen (not body) so the themed
+// region is exactly the screenshot clip. Values mirror codegen's Tailwind
+// classes (gray-900 / gray-200) — renderer and synthesized code must agree.
+const THEME_DARK_CSS = `.pa-screen { background:#111827; color:#E5E7EB; }`;
 
 export type DslToHtmlOptions = {
   /** Inject the click-to-inspect overlay. Interactive-preview only. */
@@ -354,6 +359,7 @@ export const dslToHtml = (
 
   const body = scene.nodes.map((n) => renderNode(n, true)).join('');
   const inspector = options.inspector ? `\n${INSPECTOR_MARKUP}` : '';
+  const themeCss = scene.screen.theme === 'dark' ? `\n${THEME_DARK_CSS}` : '';
 
   return `<!doctype html>
 <html>
@@ -364,7 +370,7 @@ export const dslToHtml = (
 :root {
 ${tokenDecls}
 }
-${baseCss}
+${baseCss}${themeCss}
 ${metaRules.join('\n')}
 </style>
 </head>
