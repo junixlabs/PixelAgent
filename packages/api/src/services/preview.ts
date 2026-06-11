@@ -2,12 +2,23 @@ import { parse, type ValidationWarning } from '@pixelagent/parser';
 import { dslToHtml, render } from '@pixelagent/renderer';
 import { mergeProjectTokens } from './load-tokens-dsl.js';
 
-export type PreviewOk = {
-  ok: true;
-  png: Buffer;
-  renderMs: number;
-  warnings: ValidationWarning[];
-};
+export type PreviewFormat = 'png' | 'html';
+
+export type PreviewOk =
+  | {
+      ok: true;
+      format: 'png';
+      png: Buffer;
+      renderMs: number;
+      warnings: ValidationWarning[];
+    }
+  | {
+      ok: true;
+      format: 'html';
+      html: string;
+      renderMs: number;
+      warnings: ValidationWarning[];
+    };
 
 export type PreviewErr =
   | {
@@ -18,7 +29,11 @@ export type PreviewErr =
     }
   | { ok: false; kind: 'render_failed'; message: string };
 
-export type PreviewInput = { dsl: string; scale?: number };
+export type PreviewInput = {
+  dsl: string;
+  scale?: number;
+  format?: PreviewFormat;
+};
 
 /**
  * Pure preview pipeline: parse → dslToHtml → render. Returns a
@@ -38,6 +53,19 @@ export const previewService = async (
   }
 
   const start = performance.now();
+
+  // HTML format skips Chrome entirely: the interactive preview IS the
+  // renderer's intermediate document, plus the click-to-inspect overlay.
+  if (input.format === 'html') {
+    return {
+      ok: true,
+      format: 'html',
+      html: dslToHtml(scene, { inspector: true }),
+      renderMs: Math.round(performance.now() - start),
+      warnings: warns,
+    };
+  }
+
   try {
     const html = dslToHtml(scene);
     const png = await render(html, {
@@ -47,6 +75,7 @@ export const previewService = async (
     });
     return {
       ok: true,
+      format: 'png',
       png,
       renderMs: Math.round(performance.now() - start),
       warnings: warns,

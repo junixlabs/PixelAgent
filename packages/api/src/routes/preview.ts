@@ -9,10 +9,11 @@ const bodySchema = {
   properties: {
     dsl: dslField,
     scale: { type: 'number', minimum: 0.1, maximum: 4, default: 1.0 },
+    format: { type: 'string', enum: ['png', 'html'], default: 'png' },
   },
 } as const;
 
-type PreviewBody = { dsl: string; scale?: number };
+type PreviewBody = { dsl: string; scale?: number; format?: 'png' | 'html' };
 
 export const previewRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: PreviewBody }>(
@@ -33,6 +34,13 @@ export const previewRoutes: FastifyPluginAsync = async (app) => {
         return reply
           .code(500)
           .send({ error: 'render_failed', message: result.message });
+      }
+      if (result.format === 'html') {
+        return reply.code(200).send({
+          html: result.html,
+          render_ms: result.renderMs,
+          warnings: result.warnings,
+        });
       }
       return reply.code(200).send({
         png_base64: result.png.toString('base64'),

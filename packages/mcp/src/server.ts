@@ -11,7 +11,7 @@ import {
 } from '@pixelagent/api';
 import type { PatchOp } from '@pixelagent/parser';
 import { GRAMMAR_REFERENCE } from './grammar.js';
-import { writePng } from './write-png.js';
+import { writeHtml, writePng } from './write-artifact.js';
 
 // The SDK's `registerTool` is generic over the input schema and produces a
 // callback type too deep for TS to resolve through our shapes. We type the
@@ -25,7 +25,9 @@ const PREVIEW_DESCRIPTION =
   'Render a PixelAgent DSL string to a PNG bitmap preview. ' +
   'Use this to draft a brand-new screen. For edits to existing DSL, ' +
   'prefer `pixelagent_apply_patch` — it costs ~10× fewer tokens than ' +
-  're-emitting the whole DSL.';
+  're-emitting the whole DSL. An outPath ending in .html writes an ' +
+  'interactive HTML preview instead (hover/focus states live, click ' +
+  'shows element id) — point the user at the file to review in a browser.';
 
 const APPLY_PATCH_DESCRIPTION =
   'Apply structured patch ops (modify / add / remove) to an existing DSL ' +
@@ -121,7 +123,12 @@ const pngImageBlock = (png: Buffer) =>
   }) as const;
 
 const handlePreview = async ({ dsl, scale, outPath }: PreviewArgs) => {
-  const result = await previewService({ dsl, scale });
+  const wantsHtml = outPath?.toLowerCase().endsWith('.html') ?? false;
+  const result = await previewService({
+    dsl,
+    scale,
+    format: wantsHtml ? 'html' : 'png',
+  });
   if (!result.ok) {
     return {
       isError: true,
@@ -136,6 +143,33 @@ const handlePreview = async ({ dsl, scale, outPath }: PreviewArgs) => {
           .map((w) => `  line ${w.line ?? '?'}: ${w.message}`)
           .join('\n')
       : '');
+  if (result.format === 'html') {
+    try {
+      // wantsHtml is only true when outPath is set.
+      const written = await writeHtml(result.html, outPath as string);
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text:
+              `${summary}\nWrote interactive HTML preview to ${written}\n` +
+              'Open it in a browser: hover/focus states are live; ' +
+              'click any element to see its id (Esc clears).',
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text' as const,
+            text: `outPath_failed: ${(e as Error).message}`,
+          },
+        ],
+      };
+    }
+  }
   const out = await applyOutPath(result.png, outPath, summary);
   if (!out.ok) return out.response;
   return {
@@ -249,7 +283,7 @@ export const buildMcpServer = (): McpServer => {
           .string()
           .optional()
           .describe(
-            'Optional absolute file path. When set, the rendered PNG is also written to disk at this path. Must be absolute, contain no ".." segments, and end with .png.',
+            'Optional absolute file path. Must be absolute, contain no ".." segments, and end with .png or .html. With .png the rendered bitmap is also written to disk. With .html an interactive preview is written instead of a PNG: hover/focus states are live and clicking an element shows its id — tell the user to open the file in a browser.',
           ),
       },
     },

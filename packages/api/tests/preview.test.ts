@@ -70,4 +70,29 @@ describe('POST /preview', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('format:"html" returns interactive HTML instead of PNG', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/preview',
+      payload: { dsl: loginDsl, format: 'html' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.png_base64).toBeUndefined();
+    expect(typeof body.html).toBe('string');
+    expect(body.html).toContain('<!doctype html');
+    expect(body.html).toContain('id="pa-inspector"');
+    expect(body.render_ms).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(body.warnings)).toBe(true);
+  });
+
+  it('rejects unknown format via schema', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/preview',
+      payload: { dsl: loginDsl, format: 'svg' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });

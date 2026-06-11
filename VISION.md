@@ -64,6 +64,7 @@ These are decisions already made. Don't re-litigate.
 5. **MCP-first distribution.** Primary integration point is Anthropic's MCP. Direct API is secondary.
 6. **TypeScript + Node.js.** No Python, Go, Rust in core packages. Single-language monorepo.
 7. **DSL has 15 commands.** Adding a 16th command requires explicit vision-doc update.
+8. **No non-local effects.** An element's rendered appearance is a pure function of its own declaration, the tokens it explicitly references, the screen theme, and its ancestor chain. No cascade, no specificity, no inheritance beyond documented defaults, no external styling — ever. Any feature introducing override-at-a-distance is rejected.
 
 ---
 
@@ -188,6 +189,7 @@ This document is not immutable, but changes require:
 
 ### Changelog
 - **2025-11-06:** Initial vision document. Covers Phase 1 MVP scope.
+- **2026-06-12:** Level-2 scope approved (see `docs/vision-changes/2026-06-12-level-2-interactive-preview-semantic-intent.md`): interactive HTML preview output, `goto:` flow links, semantic intent params (`level`, `alt`, `href`, `role`), consistency validator, synthesis contract (generated-code header + hash + shell/wrapper boundary). Added Architectural Invariant #8 (no non-local effects). Click-in-preview limited to state-reveal and screen-jump. Still 15 commands.
 
 ---
 

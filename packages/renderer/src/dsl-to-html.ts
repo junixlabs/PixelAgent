@@ -290,6 +290,34 @@ const renderNode = (n: Node, positioned: boolean): string => {
   }
 };
 
+// Click-to-inspect overlay for interactive HTML previews. Injected only when
+// `inspector` is requested — never on the PNG path, so screenshots stay
+// byte-stable. Click = reveal element id; Esc = clear. Nothing else.
+const INSPECTOR_MARKUP = `<div id="pa-inspector" style="display:none;position:fixed;right:12px;bottom:12px;z-index:99999;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:#111827;color:#e5e7eb;padding:8px 12px;border-radius:6px;box-shadow:0 4px 12px #0006;pointer-events:none"></div>
+<script>
+(function () {
+  var badge = document.getElementById('pa-inspector');
+  var current = null;
+  var clear = function () {
+    if (current) current.style.outline = '';
+    current = null;
+    badge.style.display = 'none';
+  };
+  document.addEventListener('click', function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest('[id]') : null;
+    if (!el) { clear(); return; }
+    if (current) current.style.outline = '';
+    current = el;
+    el.style.outline = '2px solid #4F8EF7';
+    badge.textContent = el.id;
+    badge.style.display = 'block';
+  }, true);
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') clear();
+  });
+})();
+</script>`;
+
 const baseCss = `
 *,*::before,*::after { box-sizing: border-box; }
 html,body { margin:0; padding:0; background:#fff; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#111; }
@@ -308,7 +336,15 @@ html,body { margin:0; padding:0; background:#fff; font-family: Inter, -apple-sys
 .pa-icon  { display: inline-block; mask-image: var(--icon, none); }
 `.trim();
 
-export const dslToHtml = (scene: Scene): string => {
+export type DslToHtmlOptions = {
+  /** Inject the click-to-inspect overlay. Interactive-preview only. */
+  inspector?: boolean;
+};
+
+export const dslToHtml = (
+  scene: Scene,
+  options: DslToHtmlOptions = {},
+): string => {
   const tokenDecls = scene.tokens
     .map((t) => `  --${t.id}: ${t.value};`)
     .join('\n');
@@ -317,6 +353,7 @@ export const dslToHtml = (scene: Scene): string => {
   collectMetaCss(scene.nodes, metaRules);
 
   const body = scene.nodes.map((n) => renderNode(n, true)).join('');
+  const inspector = options.inspector ? `\n${INSPECTOR_MARKUP}` : '';
 
   return `<!doctype html>
 <html>
@@ -332,7 +369,7 @@ ${metaRules.join('\n')}
 </style>
 </head>
 <body>
-<div class="pa-screen" style="width:${scene.screen.w}px;height:${scene.screen.h}px">${body}</div>
+<div class="pa-screen" style="width:${scene.screen.w}px;height:${scene.screen.h}px">${body}</div>${inspector}
 </body>
 </html>`;
 };
