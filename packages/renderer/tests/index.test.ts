@@ -125,6 +125,22 @@ describe('dslToHtml', () => {
     expect(spanStyle).not.toMatch(/width:/);
   });
 
+  it('omits the inspector overlay by default (PNG path stays byte-stable)', () => {
+    const { scene } = parse(loadDsl('login.dsl'));
+    const html = dslToHtml(scene!);
+    expect(html).not.toContain('pa-inspector');
+  });
+
+  it('inspector option appends the click-to-id overlay after the screen div', () => {
+    const { scene } = parse(loadDsl('login.dsl'));
+    const html = dslToHtml(scene!, { inspector: true });
+    expect(html).toContain('id="pa-inspector"');
+    expect(html).toContain("closest('[id]')");
+    expect(html.indexOf('id="pa-inspector"')).toBeGreaterThan(
+      html.indexOf('class="pa-screen"'),
+    );
+  });
+
   it('renders dashboard-card.dsl tokens and grid wrapper', () => {
     const { scene } = parse(loadDsl('dashboard-card.dsl'));
     expect(scene).not.toBeNull();

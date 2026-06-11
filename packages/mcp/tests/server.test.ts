@@ -262,6 +262,43 @@ describe('MCP server — primitive tools (no LLM)', () => {
     },
   );
 
+  it('preview outPath .html writes interactive HTML and returns text-only content', async () => {
+    const server = buildMcpServer();
+    const outPath = join(tmpdir(), `pa-${randomUUID()}.html`);
+    try {
+      const result = await callTool(server, 'pixelagent_preview', {
+        dsl: loginDsl,
+        outPath,
+      });
+      expect(result.isError).toBeFalsy();
+      const html = readFileSync(outPath, 'utf-8');
+      expect(html).toContain('<!doctype html');
+      expect(html).toContain('id="pa-inspector"');
+      // HTML mode skips Chrome — no image block, text only.
+      const types = result.content.map((c: { type: string }) => c.type);
+      expect(types).toEqual(['text']);
+      expect(result.content[0].text).toContain(
+        `Wrote interactive HTML preview to ${outPath}`,
+      );
+    } finally {
+      if (existsSync(outPath)) unlinkSync(outPath);
+    }
+  });
+
+  it('preview rejects relative .html outPath', async () => {
+    const server = buildMcpServer();
+    const result = await callTool(server, 'pixelagent_preview', {
+      dsl: loginDsl,
+      outPath: './foo.html',
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content.find(
+      (c: { type: string }) => c.type === 'text',
+    );
+    expect(text.text).toContain('outPath_failed');
+    expect(text.text).toContain('must be absolute');
+  });
+
   it('apply_patch supports remove + add ops', async () => {
     const server = buildMcpServer();
     const result = await callTool(server, 'pixelagent_apply_patch', {

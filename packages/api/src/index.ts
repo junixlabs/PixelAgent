@@ -9,6 +9,7 @@ export { buildApp } from './server.js';
 export {
   previewService,
   type PreviewInput,
+  type PreviewFormat,
   type PreviewOk,
   type PreviewErr,
 } from './services/preview.js';
