@@ -70,6 +70,11 @@ Example:
 SCREEN 1440 900 theme:light
 ```
 
+`theme:dark` sets the canvas default background to `#111827` and the default
+foreground to `#E5E7EB`; `theme:light` keeps `#ffffff` / `#111`. Elements that
+inherit color (e.g. `BUTTON variant:ghost`) follow the theme foreground. The
+renderer and every codegen target must use these same values.
+
 Rules: [`screen-first`](#screen-first).
 
 #### `TOKEN`
@@ -496,6 +501,19 @@ above the input.
 `BUTTON` and `INPUT` SHOULD have `h >= 36`px (mobile tap target).
 
 **Why.** Sub-36px controls fail accessibility and feel cramped on touch.
+
+<a id="low-contrast"></a>
+### 4.11 `low-contrast` *(warning)*
+
+`TEXT` with an explicit `color:` placed inside a `LAYER` with an explicit
+`bg:` SHOULD have a WCAG contrast ratio ≥ 3.0 against that background. Token
+references are resolved before measuring; non-hex color values are skipped,
+as is TEXT with no enclosing explicit background.
+
+**Why.** Neither human reviewers nor vision models measure contrast reliably
+— the AST can, deterministically and for free. First rule of the consistency
+validator (Level-2 scope, see
+`docs/vision-changes/2026-06-12-level-2-interactive-preview-semantic-intent.md`).
 
 ## 5. Scene IR mapping
 

@@ -1,5 +1,6 @@
 import type {
   Scene,
+  Node,
   ButtonNode,
   InputNode,
   StackNode,
@@ -16,6 +17,43 @@ import { walkNodes } from './helpers.js';
 //   - block-end-required: enforced at parse time.
 //   - border-inline-only: enforced at parse time (rejects EFFECT … border).
 //   - fill-no-id: enforced at parse time (parseFill).
+
+const MIN_CONTRAST_RATIO = 3.0;
+
+const hexToRgb = (hex: string): [number, number, number] | null => {
+  const m3 = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(hex);
+  if (m3) {
+    return [
+      parseInt(m3[1] + m3[1], 16),
+      parseInt(m3[2] + m3[2], 16),
+      parseInt(m3[3] + m3[3], 16),
+    ];
+  }
+  const m6 = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (m6) {
+    return [parseInt(m6[1], 16), parseInt(m6[2], 16), parseInt(m6[3], 16)];
+  }
+  return null;
+};
+
+// WCAG 2.x relative luminance + contrast ratio.
+const luminance = ([r, g, b]: [number, number, number]): number => {
+  const lin = (v: number): number => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+};
+
+const contrastRatio = (
+  a: [number, number, number],
+  b: [number, number, number],
+): number => {
+  const la = luminance(a);
+  const lb = luminance(b);
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+  return (hi + 0.05) / (lo + 0.05);
+};
 
 export function validate(scene: Scene): ValidationWarning[] {
   const warnings: ValidationWarning[] = [];
@@ -118,6 +156,46 @@ export function validate(scene: Scene): ValidationWarning[] {
       }
     }
   });
+
+  // low-contrast — TEXT with an explicit color measured against the nearest
+  // ancestor LAYER with an explicit bg. Token refs resolve first; non-hex
+  // values are skipped. Deliberately conservative: no theme defaults, no
+  // overlap analysis — zero false positives over completeness.
+  const tokenValues = new Map(
+    (scene.tokens as TokenNode[]).map((t) => [t.id, t.value]),
+  );
+  const resolveColor = (c: string): string =>
+    c.startsWith('$') ? String(tokenValues.get(c.slice(1)) ?? c) : c;
+
+  const checkContrast = (nodes: Node[], bg: string | null): void => {
+    for (const n of nodes) {
+      if (n.type === 'layer') {
+        checkContrast(n.children, n.bg ? resolveColor(n.bg) : bg);
+      } else if (
+        n.type === 'stack' ||
+        n.type === 'grid' ||
+        n.type === 'repeat'
+      ) {
+        checkContrast(n.children, bg);
+      } else if (n.type === 'text' && n.color && bg) {
+        const fg = hexToRgb(resolveColor(n.color));
+        const bgRgb = hexToRgb(bg);
+        if (fg && bgRgb) {
+          const ratio = contrastRatio(fg, bgRgb);
+          if (ratio < MIN_CONTRAST_RATIO) {
+            warnings.push({
+              rule: 'low-contrast',
+              severity: 'warning',
+              line: getNodeLine(n),
+              nodeId: n.id,
+              message: `TEXT color ${resolveColor(n.color)} on background ${bg} has contrast ratio ${ratio.toFixed(2)} (< ${MIN_CONTRAST_RATIO})`,
+            });
+          }
+        }
+      }
+    }
+  };
+  checkContrast(scene.nodes, null);
 
   return warnings;
 }

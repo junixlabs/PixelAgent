@@ -27,8 +27,17 @@ const STACK_ALIGN_CLASS: Record<string, string> = {
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary: 'text-white',
   secondary: 'bg-gray-200 text-black',
-  ghost: 'bg-transparent text-black',
+  // ghost inherits the theme foreground — resolved per-theme in emitNode.
+  ghost: 'bg-transparent',
   destructive: 'bg-red-600 text-white',
+};
+
+// theme:dark canvas classes. Mirror the renderer's THEME_DARK_CSS
+// (#111827 / #E5E7EB) — preview and synthesized code must agree.
+const SCREEN_DARK_CLASS = 'bg-[#111827] text-[#E5E7EB]';
+const GHOST_TEXT: Record<'light' | 'dark', string> = {
+  light: 'text-black',
+  dark: 'text-[#E5E7EB]',
 };
 
 const FIT_CLASS: Record<string, string> = {
@@ -79,6 +88,7 @@ type Ctx = {
   resolveColor: (c: Color) => string;
   buttonHover: Map<string, string>;
   primary: string;
+  theme: 'light' | 'dark';
 };
 
 const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
@@ -198,7 +208,9 @@ const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
       const variantCls =
         variant === 'primary'
           ? `bg-[${ctx.primary}] text-white`
-          : VARIANT_CLASS[variant];
+          : variant === 'ghost'
+            ? `${VARIANT_CLASS.ghost} ${GHOST_TEXT[ctx.theme]}`
+            : VARIANT_CLASS[variant];
       const hover = ctx.buttonHover.get(n.id);
       const hoverCls = hover ? `hover:bg-[${hover}]` : '';
       const cls = posCls(
@@ -300,12 +312,13 @@ export const toReact = (scene: Scene): string => {
   }
 
   const primary = tokens.get('primary') ?? PRIMARY_DEFAULT;
-  const ctx: Ctx = { resolveColor, buttonHover, primary };
+  const theme = scene.screen.theme ?? 'light';
+  const ctx: Ctx = { resolveColor, buttonHover, primary, theme };
 
   const body = scene.nodes.map((n) => emitNode(n, true, ctx)).join('');
   const screenCls = `relative overflow-hidden w-${px(
     scene.screen.w,
-  )} h-${px(scene.screen.h)}`;
+  )} h-${px(scene.screen.h)}${theme === 'dark' ? ` ${SCREEN_DARK_CLASS}` : ''}`;
 
   return [
     `export default function GeneratedScreen() {`,

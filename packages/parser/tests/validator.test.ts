@@ -114,3 +114,82 @@ describe('validator — severity per SPEC', () => {
     expect(dup?.severity).toBe('error');
   });
 });
+
+describe('validator — low-contrast', () => {
+  it('warns when TEXT color is too close to the enclosing LAYER bg', () => {
+    const { warnings } = parse(
+      [
+        'SCREEN 800 600',
+        'LAYER card 0 0 400 200 bg:#111111',
+        '  TEXT t 16 16 "dim" color:#222222',
+        'END',
+        '',
+      ].join('\n'),
+    );
+    const w = warnings.find((x) => x.rule === 'low-contrast');
+    expect(w).toBeDefined();
+    expect(w!.severity).toBe('warning');
+    expect(w!.nodeId).toBe('t');
+    expect(w!.message).toContain('contrast ratio');
+  });
+
+  it('stays silent for sufficient contrast', () => {
+    expect(
+      rules(
+        [
+          'SCREEN 800 600',
+          'LAYER card 0 0 400 200 bg:#111111',
+          '  TEXT t 16 16 "bright" color:#ffffff',
+          'END',
+          '',
+        ].join('\n'),
+      ),
+    ).not.toContain('low-contrast');
+  });
+
+  it('resolves token references before measuring', () => {
+    expect(
+      rules(
+        [
+          'SCREEN 800 600',
+          'TOKEN ink #131826',
+          'LAYER card 0 0 400 200 bg:#111111',
+          '  TEXT t 16 16 "dim" color:$ink',
+          'END',
+          '',
+        ].join('\n'),
+      ),
+    ).toContain('low-contrast');
+  });
+
+  it('skips TEXT with no enclosing explicit bg or no explicit color', () => {
+    expect(
+      rules(
+        [
+          'SCREEN 800 600',
+          'TEXT loose 16 16 "no bg context" color:#222222',
+          'LAYER plain 0 0 400 200 bg:#111111',
+          '  TEXT silent 16 16 "no explicit color"',
+          'END',
+          '',
+        ].join('\n'),
+      ),
+    ).not.toContain('low-contrast');
+  });
+
+  it('nested LAYER without bg inherits the outer bg context', () => {
+    expect(
+      rules(
+        [
+          'SCREEN 800 600',
+          'LAYER outer 0 0 400 400 bg:#111111',
+          '  LAYER inner 16 16 200 200',
+          '    TEXT t 8 8 "dim" color:#222222',
+          '  END',
+          'END',
+          '',
+        ].join('\n'),
+      ),
+    ).toContain('low-contrast');
+  });
+});

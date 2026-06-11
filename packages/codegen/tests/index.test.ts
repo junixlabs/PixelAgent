@@ -65,4 +65,24 @@ describe('@pixelagent/codegen', () => {
       expect(code).not.toMatch(/:\s*any\b/);
     });
   });
+
+  describe('toReact theme handling', () => {
+    it('theme:dark adds canvas classes and ghost uses light text (renderer parity)', () => {
+      const dsl = `SCREEN 800 600 theme:dark\nBUTTON g 10 10 120 40 "Ghost" variant:ghost\n`;
+      const { scene } = parse(dsl);
+      expect(scene).not.toBeNull();
+      const code = toReact(scene!);
+      expect(code).toContain('bg-[#111827] text-[#E5E7EB]');
+      expect(code).toMatch(/bg-transparent text-\[#E5E7EB\][^"]*">Ghost/);
+      expect(code).not.toContain('text-black');
+    });
+
+    it('theme:light keeps ghost text black and no dark canvas (regression)', () => {
+      const dsl = `SCREEN 800 600\nBUTTON g 10 10 120 40 "Ghost" variant:ghost\n`;
+      const { scene } = parse(dsl);
+      const code = toReact(scene!);
+      expect(code).toContain('bg-transparent text-black');
+      expect(code).not.toContain('#111827');
+    });
+  });
 });
