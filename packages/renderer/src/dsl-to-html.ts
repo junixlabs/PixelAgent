@@ -99,6 +99,9 @@ const suffixIds = (n: Node, suffix: string): Node => {
   return clone;
 };
 
+const gotoAttr = (g?: string): string =>
+  g ? ` data-goto="${escapeHtml(g)}"` : '';
+
 const posCls = (positioned: boolean, extra?: string): string => {
   const base = positioned ? 'pa-abs' : 'pa-flow';
   return extra ? `${base} ${extra}` : base;
@@ -194,14 +197,14 @@ const renderNode = (n: Node, positioned: boolean): string => {
       if (n.maxWidth !== undefined) parts.push(`width:${n.maxWidth}px`);
       else if (n.align === 'center' || n.align === 'right') parts.push('width:100%');
       if (n.align) parts.push(`text-align:${n.align}`);
-      return `<span id="${escapeHtml(n.id)}" class="${posCls(positioned)}" style="${parts.join(';')}">${escapeHtml(n.text)}</span>`;
+      return `<span id="${escapeHtml(n.id)}" class="${posCls(positioned)}"${gotoAttr(n.goto)} style="${parts.join(';')}">${escapeHtml(n.text)}</span>`;
     }
     case 'icon': {
       const size = n.size ?? ICON_DEFAULT_SIZE_PX;
       const parts = positionParts(n, positioned);
       parts.push(`width:${size}px`, `height:${size}px`);
       if (n.color) parts.push(`background:${resolveColor(n.color)}`);
-      return `<span id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-icon')}" data-icon="${escapeHtml(n.name)}" style="${parts.join(';')}"></span>`;
+      return `<span id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-icon')}" data-icon="${escapeHtml(n.name)}"${gotoAttr(n.goto)} style="${parts.join(';')}"></span>`;
     }
     case 'image': {
       const parts = positionParts(n, positioned);
@@ -214,9 +217,9 @@ const renderNode = (n: Node, positioned: boolean): string => {
       };
       if (n.fit) parts.push(`object-fit:${fitMap[n.fit]}`);
       if (n.src) {
-        return `<img id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}" src="${escapeHtml(n.src)}" style="${parts.join(';')}"/>`;
+        return `<img id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}"${gotoAttr(n.goto)} src="${escapeHtml(n.src)}" style="${parts.join(';')}"/>`;
       }
-      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}" style="${parts.join(';')};background:${IMAGE_PLACEHOLDER_BG}"></div>`;
+      return `<div id="${escapeHtml(n.id)}" class="${posCls(positioned, 'pa-image')}"${gotoAttr(n.goto)} style="${parts.join(';')};background:${IMAGE_PLACEHOLDER_BG}"></div>`;
     }
     case 'input': {
       const inputType = n.inputType ?? 'text';
@@ -248,7 +251,7 @@ const renderNode = (n: Node, positioned: boolean): string => {
       const disabledAttr = n.state === 'disabled' ? ' disabled' : '';
       const parts = positionParts(n, positioned);
       parts.push(`width:${n.w}px`, `height:${n.h}px`, `border-radius:${BUTTON_RADIUS_PX}px`);
-      return `<button id="${escapeHtml(n.id)}" class="${posCls(positioned, `pa-btn pa-btn-${variant}${stateClass}`)}"${disabledAttr} style="${parts.join(';')}">${escapeHtml(n.label)}</button>`;
+      return `<button id="${escapeHtml(n.id)}" class="${posCls(positioned, `pa-btn pa-btn-${variant}${stateClass}`)}"${disabledAttr}${gotoAttr(n.goto)} style="${parts.join(';')}">${escapeHtml(n.label)}</button>`;
     }
     case 'layer': {
       const parts = positionParts(n, positioned);
@@ -334,6 +337,7 @@ html,body { margin:0; padding:0; background:#fff; font-family: Inter, -apple-sys
 .pa-input { border: 1px solid #d1d5db; border-radius: 8px; padding: 0 12px; font-size: 14px; outline: none; background: #fff; color: #111; }
 .pa-input:focus { border-color: var(--primary, #185FA5); }
 .pa-icon  { display: inline-block; mask-image: var(--icon, none); }
+[data-goto] { cursor: pointer; }
 `.trim();
 
 // theme:dark canvas defaults. Scoped to .pa-screen (not body) so the themed
@@ -341,9 +345,25 @@ html,body { margin:0; padding:0; background:#fff; font-family: Inter, -apple-sys
 // classes (gray-900 / gray-200) — renderer and synthesized code must agree.
 const THEME_DARK_CSS = `.pa-screen { background:#111827; color:#E5E7EB; }`;
 
+// Flow-link navigation for bundled previews. A click on a [data-goto]
+// element does exactly one thing: tells the parent shell which screen to
+// show. No handlers, no state — the two-behavior boundary from
+// docs/vision-changes/2026-06-12 is enforced here.
+const NAVIGATION_MARKUP = `<script>
+(function () {
+  document.addEventListener('click', function (ev) {
+    var el = ev.target && ev.target.closest ? ev.target.closest('[data-goto]') : null;
+    if (!el) return;
+    window.parent.postMessage({ paGoto: el.getAttribute('data-goto') }, '*');
+  }, true);
+})();
+</script>`;
+
 export type DslToHtmlOptions = {
   /** Inject the click-to-inspect overlay. Interactive-preview only. */
   inspector?: boolean;
+  /** Inject the goto click→postMessage script. Bundled-preview only. */
+  navigation?: boolean;
 };
 
 export const dslToHtml = (
@@ -359,6 +379,7 @@ export const dslToHtml = (
 
   const body = scene.nodes.map((n) => renderNode(n, true)).join('');
   const inspector = options.inspector ? `\n${INSPECTOR_MARKUP}` : '';
+  const navigation = options.navigation ? `\n${NAVIGATION_MARKUP}` : '';
   const themeCss = scene.screen.theme === 'dark' ? `\n${THEME_DARK_CSS}` : '';
 
   return `<!doctype html>
@@ -375,7 +396,56 @@ ${metaRules.join('\n')}
 </style>
 </head>
 <body>
-<div class="pa-screen" style="width:${scene.screen.w}px;height:${scene.screen.h}px">${body}</div>${inspector}
+<div class="pa-screen" style="width:${scene.screen.w}px;height:${scene.screen.h}px">${body}</div>${navigation}${inspector}
+</body>
+</html>`;
+};
+
+export type BundleScreen = { id: string; scene: Scene };
+
+/**
+ * Compose multiple screens into one self-contained navigable HTML document.
+ * Each screen lives in its own iframe (srcdoc) so its tokens, ids, and
+ * STATE/EFFECT CSS stay a closed world per VISION.md Invariant #8 — no
+ * cross-screen effects possible. Clicking a goto element switches frames.
+ */
+export const bundleToHtml = (
+  screens: BundleScreen[],
+  entry: string,
+): string => {
+  const frames = screens
+    .map(({ id, scene }) => {
+      const doc = dslToHtml(scene, { inspector: true, navigation: true });
+      return `<iframe data-screen="${escapeHtml(id)}" title="${escapeHtml(id)}" srcdoc="${escapeHtml(doc)}"></iframe>`;
+    })
+    .join('\n');
+
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html,body { margin:0; height:100%; background:#374151; }
+iframe { border:0; width:100%; height:100%; display:none; }
+iframe.active { display:block; }
+</style>
+</head>
+<body>
+${frames}
+<script>
+(function () {
+  var frames = document.querySelectorAll('iframe[data-screen]');
+  var show = function (id) {
+    frames.forEach(function (f) {
+      f.classList.toggle('active', f.getAttribute('data-screen') === id);
+    });
+  };
+  window.addEventListener('message', function (ev) {
+    if (ev.data && typeof ev.data.paGoto === 'string') show(ev.data.paGoto);
+  });
+  show(${JSON.stringify(entry)});
+})();
+</script>
 </body>
 </html>`;
 };

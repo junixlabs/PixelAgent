@@ -299,6 +299,38 @@ describe('MCP server — primitive tools (no LLM)', () => {
     expect(text.text).toContain('must be absolute');
   });
 
+  it('preview screens bundle writes navigable HTML to outPath', async () => {
+    const server = buildMcpServer();
+    const outPath = join(tmpdir(), `pa-${randomUUID()}.html`);
+    try {
+      const result = await callTool(server, 'pixelagent_preview', {
+        screens: {
+          login: 'SCREEN 400 300\nBUTTON to-home 10 10 120 40 "Go" goto:home\n',
+          home: 'SCREEN 400 300\nTEXT hi 10 10 "Welcome"\n',
+        },
+        entry: 'login',
+        outPath,
+      });
+      expect(result.isError).toBeFalsy();
+      expect(result.content[0].text).toContain('2-screen bundle');
+      const html = readFileSync(outPath, 'utf-8');
+      expect(html).toContain('data-screen="login"');
+      expect(html).toContain('data-screen="home"');
+    } finally {
+      if (existsSync(outPath)) unlinkSync(outPath);
+    }
+  });
+
+  it('preview screens bundle requires an .html outPath', async () => {
+    const server = buildMcpServer();
+    const result = await callTool(server, 'pixelagent_preview', {
+      screens: { login: 'SCREEN 400 300\nTEXT t 10 10 "hi"\n' },
+      entry: 'login',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('.html');
+  });
+
   it('apply_patch supports remove + add ops', async () => {
     const server = buildMcpServer();
     const result = await callTool(server, 'pixelagent_apply_patch', {

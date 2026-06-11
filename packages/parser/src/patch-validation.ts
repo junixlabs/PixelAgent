@@ -48,6 +48,13 @@ const color: Validator = (raw) => {
   return { ok: false, error: `invalid color '${raw}'` };
 };
 
+const ident: Validator = (raw) => {
+  if (typeof raw !== 'string' || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(raw)) {
+    return { ok: false, error: `expected identifier, got '${String(raw)}'` };
+  }
+  return { ok: true, value: raw };
+};
+
 const enumOf = <T extends string>(values: readonly T[]): Validator => (raw) => {
   if (typeof raw !== 'string' || !(values as readonly string[]).includes(raw)) {
     return { ok: false, error: `expected one of ${values.join('|')}, got '${raw}'` };
@@ -73,10 +80,10 @@ const RULES: Record<string, Record<string, Validator>> = {
   text: {
     x: num, y: num, text: str,
     size: num, weight: enumOf(VALID_WEIGHTS), color,
-    align: enumOf(VALID_ALIGNS), 'max-width': num, maxWidth: num,
+    align: enumOf(VALID_ALIGNS), 'max-width': num, maxWidth: num, goto: ident,
   },
-  icon: { x: num, y: num, name: str, size: num, color },
-  image: { x: num, y: num, w: num, h: num, src: str, fit: enumOf(VALID_FITS), r: num },
+  icon: { x: num, y: num, name: str, size: num, color, goto: ident },
+  image: { x: num, y: num, w: num, h: num, src: str, fit: enumOf(VALID_FITS), r: num, goto: ident },
   input: {
     x: num, y: num, w: num, h: num,
     type: enumOf(VALID_INPUT_TYPES), inputType: enumOf(VALID_INPUT_TYPES),
@@ -85,6 +92,7 @@ const RULES: Record<string, Record<string, Validator>> = {
   button: {
     x: num, y: num, w: num, h: num, label: str,
     variant: enumOf(VALID_BUTTON_VARIANTS), state: enumOf(VALID_ELEMENT_STATES),
+    goto: ident,
   },
   layer: { x: num, y: num, w: num, h: num, bg: color, r: num, border },
   stack: {

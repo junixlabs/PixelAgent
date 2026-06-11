@@ -119,6 +119,8 @@ export type TextNode = {
   color?: Color;
   align?: Align;
   maxWidth?: number;
+  /** Flow link: id of the screen this element navigates to in preview. */
+  goto?: string;
 };
 
 export type IconNode = {
@@ -129,6 +131,7 @@ export type IconNode = {
   name: string;
   size?: number;
   color?: Color;
+  goto?: string;
 };
 
 export type ImageNode = {
@@ -141,6 +144,7 @@ export type ImageNode = {
   src: string;
   fit?: Fit;
   r?: number;
+  goto?: string;
 };
 
 export type InputNode = {
@@ -166,6 +170,7 @@ export type ButtonNode = {
   label: string;
   variant?: ButtonVariant;
   state?: ElementState;
+  goto?: string;
 };
 
 export type LayerNode = {

@@ -147,7 +147,7 @@ Rules: [`id-uniqueness`](#id-uniqueness), [`rect-no-children`](#rect-no-children
 Text run.
 
 ```
-TEXT <id> <x:int> <y:int> "<string>" [size:int] [weight:Weight] [color:color] [align:Align] [max-width:int]
+TEXT <id> <x:int> <y:int> "<string>" [size:int] [weight:Weight] [color:color] [align:Align] [max-width:int] [goto:ident]
 ```
 
 | Param     | Required | Type | Default |
@@ -157,6 +157,7 @@ TEXT <id> <x:int> <y:int> "<string>" [size:int] [weight:Weight] [color:color] [a
 | color     | no       | color | inherit (`#111`) |
 | align     | no       | `left` \| `center` \| `right` | `left` |
 | max-width | no       | int (px) | unbounded |
+| goto      | no       | screen id ([flow link](#flow-links)) | none |
 
 Example:
 
@@ -172,13 +173,14 @@ Rules: [`id-uniqueness`](#id-uniqueness),
 Icon glyph. Renderer resolves `name` against an icon set (e.g. Lucide).
 
 ```
-ICON <id> <x:int> <y:int> "<name>" [size:int] [color:color]
+ICON <id> <x:int> <y:int> "<name>" [size:int] [color:color] [goto:ident]
 ```
 
 | Param | Required | Type | Default |
 |-------|----------|------|---------|
 | size  | no       | int (px) | `16` |
 | color | no       | color | inherit |
+| goto  | no       | screen id ([flow link](#flow-links)) | none |
 
 Example:
 
@@ -193,13 +195,14 @@ Rules: [`id-uniqueness`](#id-uniqueness).
 Bitmap or vector image.
 
 ```
-IMAGE <id> <x:int> <y:int> <w:int> <h:int> <src:string> [fit:Fit] [r:int]
+IMAGE <id> <x:int> <y:int> <w:int> <h:int> <src:string> [fit:Fit] [r:int] [goto:ident]
 ```
 
 | Param | Required | Type | Default |
 |-------|----------|------|---------|
 | fit   | no       | `cover` \| `contain` \| `fill` | `cover` |
 | r     | no       | int (px) | `0` |
+| goto  | no       | screen id ([flow link](#flow-links)) | none |
 
 Example:
 
@@ -241,13 +244,24 @@ Rules: [`id-uniqueness`](#id-uniqueness),
 Button.
 
 ```
-BUTTON <id> <x:int> <y:int> <w:int> <h:int> "<label>" [variant:ButtonVariant] [state:ElementState]
+BUTTON <id> <x:int> <y:int> <w:int> <h:int> "<label>" [variant:ButtonVariant] [state:ElementState] [goto:ident]
 ```
 
 | Param   | Required | Type | Default |
 |---------|----------|------|---------|
 | variant | no       | `primary` \| `secondary` \| `ghost` \| `destructive` (alias: `danger`) | `primary` |
 | state   | no       | `default` \| `hover` \| `focus` \| `active` \| `disabled` | `default` |
+| goto    | no       | screen id ([flow link](#flow-links)) | none |
+
+<a id="flow-links"></a>
+**Flow links.** `goto:<screen-id>` marks TEXT / ICON / IMAGE / BUTTON as a
+link to another screen of a multi-screen preview bundle. It carries **no
+logic** — in preview, a click can only reveal a visual state or jump to
+another screen, nothing else (Level-2 boundary, see
+`docs/vision-changes/2026-06-12-level-2-interactive-preview-semantic-intent.md`).
+A `goto` referencing a screen id not present in the bundle yields the
+bundle-level warning `goto-unknown-screen`. In single-screen previews and in
+the PNG path the param is inert.
 
 Example:
 

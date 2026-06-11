@@ -140,6 +140,24 @@ describe('dslToHtml', () => {
     expect(html).not.toContain('#111827');
   });
 
+  it('goto elements carry data-goto and the cursor CSS exists', () => {
+    const dsl = `SCREEN 800 600\nBUTTON go 10 10 120 40 "Home" goto:home\n`;
+    const { scene } = parse(dsl);
+    const html = dslToHtml(scene!);
+    expect(html).toMatch(/<button id="go"[^>]*data-goto="home"/);
+    expect(html).toContain('[data-goto] { cursor: pointer; }');
+    // navigation script only with the option
+    expect(html).not.toContain('paGoto');
+  });
+
+  it('navigation option injects the postMessage script', () => {
+    const dsl = `SCREEN 800 600\nBUTTON go 10 10 120 40 "Home" goto:home\n`;
+    const { scene } = parse(dsl);
+    const html = dslToHtml(scene!, { navigation: true });
+    expect(html).toContain("closest('[data-goto]')");
+    expect(html).toContain('paGoto');
+  });
+
   it('omits the inspector overlay by default (PNG path stays byte-stable)', () => {
     const { scene } = parse(loadDsl('login.dsl'));
     const html = dslToHtml(scene!);

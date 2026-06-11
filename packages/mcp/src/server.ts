@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
   applyPatchService,
+  previewBundleService,
   previewService,
   synthesizeService,
   type ApplyPatchErr,
@@ -17,7 +18,13 @@ import { writeHtml, writePng } from './write-artifact.js';
 // callback type too deep for TS to resolve through our shapes. We type the
 // args explicitly and cast the callback at the SDK boundary; runtime
 // validation is still enforced by zod via the SDK.
-type PreviewArgs = { dsl: string; scale?: number; outPath?: string };
+type PreviewArgs = {
+  dsl?: string;
+  scale?: number;
+  outPath?: string;
+  screens?: Record<string, string>;
+  entry?: string;
+};
 type ApplyPatchArgs = { dsl: string; ops: PatchOp[]; outPath?: string };
 type SynthesizeArgs = { dsl: string; target?: SynthesizeTarget };
 
@@ -27,7 +34,10 @@ const PREVIEW_DESCRIPTION =
   'prefer `pixelagent_apply_patch` — it costs ~10× fewer tokens than ' +
   're-emitting the whole DSL. An outPath ending in .html writes an ' +
   'interactive HTML preview instead (hover/focus states live, click ' +
-  'shows element id) — point the user at the file to review in a browser.';
+  'shows element id) — point the user at the file to review in a browser. ' +
+  'For multi-screen flows pass screens (id → DSL) + entry instead of dsl: ' +
+  'elements with goto:<screen-id> become clickable links between screens ' +
+  'in the navigable HTML bundle.';
 
 const APPLY_PATCH_DESCRIPTION =
   'Apply structured patch ops (modify / add / remove) to an existing DSL ' +
@@ -122,8 +132,77 @@ const pngImageBlock = (png: Buffer) =>
     mimeType: 'image/png',
   }) as const;
 
-const handlePreview = async ({ dsl, scale, outPath }: PreviewArgs) => {
+const textError = (text: string) => ({
+  isError: true,
+  content: [{ type: 'text' as const, text }],
+});
+
+const handlePreview = async ({
+  dsl,
+  scale,
+  outPath,
+  screens,
+  entry,
+}: PreviewArgs) => {
   const wantsHtml = outPath?.toLowerCase().endsWith('.html') ?? false;
+
+  if (screens !== undefined) {
+    if (dsl !== undefined) {
+      return textError('bad_request: provide either dsl or screens, not both');
+    }
+    if (entry === undefined) {
+      return textError('bad_request: screens requires entry (the starting screen id)');
+    }
+    if (!wantsHtml) {
+      return textError(
+        'bad_request: a screens bundle requires outPath ending in .html (the navigable preview is an HTML file)',
+      );
+    }
+    const result = await previewBundleService({ screens, entry, format: 'html' });
+    if (!result.ok) {
+      switch (result.kind) {
+        case 'parse_failed':
+          return textError(
+            `parse_failed in screen '${result.screenId}' (${result.errors.length} errors):\n` +
+              result.errors
+                .map((e) => `  line ${e.line ?? '?'}: ${e.message}`)
+                .join('\n'),
+          );
+        case 'bad_bundle':
+          return textError(`bad_bundle: ${result.message}`);
+        case 'render_failed':
+          return textError(`render_failed: ${result.message}`);
+      }
+    }
+    if (result.format !== 'html') {
+      return textError('internal: bundle preview expected html result');
+    }
+    try {
+      const written = await writeHtml(result.html, outPath as string);
+      const warnText =
+        result.warnings.length > 0
+          ? ` ${result.warnings.length} warning(s):\n` +
+            result.warnings.map((w) => `  ${w.message}`).join('\n')
+          : '';
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text:
+              `Composed ${Object.keys(screens).length}-screen bundle (entry: ${entry}).${warnText}\n` +
+              `Wrote navigable HTML preview to ${written}\n` +
+              'Open it in a browser: clicking goto elements jumps between screens; hover/focus states are live.',
+          },
+        ],
+      };
+    } catch (e) {
+      return textError(`outPath_failed: ${(e as Error).message}`);
+    }
+  }
+
+  if (dsl === undefined) {
+    return textError('bad_request: dsl is required when screens is not given');
+  }
   const result = await previewService({
     dsl,
     scale,
@@ -272,7 +351,24 @@ export const buildMcpServer = (): McpServer => {
       title: 'Preview DSL',
       description: PREVIEW_DESCRIPTION,
       inputSchema: {
-        dsl: z.string().min(1).describe('PixelAgent DSL source. Must start with SCREEN.'),
+        dsl: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            'PixelAgent DSL source. Must start with SCREEN. Required unless screens is given.',
+          ),
+        screens: z
+          .record(z.string().min(1))
+          .optional()
+          .describe(
+            'Multi-screen flow bundle: map of screen-id → DSL source. Elements with goto:<screen-id> navigate between screens in the HTML preview. Requires entry and an outPath ending in .html.',
+          ),
+        entry: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('Starting screen id for a screens bundle.'),
         scale: z
           .number()
           .min(0.1)
