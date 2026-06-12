@@ -547,12 +547,47 @@ above the input.
 `TEXT` with an explicit `color:` placed inside a `LAYER` with an explicit
 `bg:` SHOULD have a WCAG contrast ratio ≥ 3.0 against that background. Token
 references are resolved before measuring; non-hex color values are skipped,
-as is TEXT with no enclosing explicit background.
+as is TEXT with no enclosing explicit background, and TEXT whose anchor
+point is covered by a sibling `RECT` / `IMAGE` / `FILL` (the visible
+background is then unknown — the rule skips rather than guesses).
 
 **Why.** Neither human reviewers nor vision models measure contrast reliably
 — the AST can, deterministically and for free. First rule of the consistency
 validator (Level-2 scope, see
 `docs/vision-changes/2026-06-12-level-2-interactive-preview-semantic-intent.md`).
+
+<a id="token-coverage"></a>
+### 4.12 `token-coverage` *(warning)*
+
+A raw hex color that exactly duplicates a declared `TOKEN` value
+(case-insensitive) SHOULD be written as the `$ref` instead. Fires on `bg:`,
+`color:`, and border colors; silent when no tokens are declared.
+
+**Why.** A duplicated literal silently detaches from the token: change
+`$primary` later and the stray copy stays behind — exactly the
+inconsistency class Problem 3 exists to kill.
+
+<a id="hover-coverage"></a>
+### 4.13 `hover-coverage` *(warning)*
+
+When a scene declares at least one `STATE … hover`, every `BUTTON` SHOULD
+have one. Scenes with no hover styling at all stay silent — that is a draft,
+not an inconsistency.
+
+**Why.** Partial hover coverage is the "two buttons behave differently"
+bug users have to discover by mousing around. All-or-nothing is consistent;
+some-but-not-all is a mistake.
+
+<a id="spacing-rhythm"></a>
+### 4.14 `spacing-rhythm` *(warning)*
+
+Among 3+ same-type absolutely-positioned siblings aligned on one axis
+(same `x` for columns, same `y` for rows), consecutive gaps that differ by
+1–8px are flagged. Larger differences are treated as deliberate design.
+
+**Why.** Almost-equal-but-not-equal spacing is the signature of a typo
+(`y:156` vs `y:158`), invisible to eyes and vision models alike — and a
+one-subtraction check for the AST.
 
 ## 5. Scene IR mapping
 
