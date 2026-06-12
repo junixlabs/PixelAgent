@@ -84,6 +84,12 @@ const escapeAttr = (s: string): string =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+// Ids follow the DSL identifier grammar — safe to single-quote verbatim.
+const quoteId = (id: string): string => `'${id}'`;
+
+const wrapHref = (el: string, href?: string): string =>
+  href ? `<a href="${escapeAttr(href)}">${el}</a>` : el;
+
 type Ctx = {
   resolveColor: (c: Color) => string;
   buttonHover: Map<string, string>;
@@ -135,9 +141,13 @@ const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
       if (n.maxWidth !== undefined) parts.push(`w-${px(n.maxWidth)}`);
       if (n.align) parts.push(ALIGN_TEXT_CLASS[n.align]);
       const cls = posCls(positioned, parts.join(' '));
-      return `<span id="${escapeAttr(n.id)}" className="${cls}">${escapeJsxText(
-        n.text,
-      )}</span>`;
+      // Semantic level relies on Tailwind preflight zeroing h1–h6 defaults,
+      // so the explicit size/weight classes stay the only visual source.
+      const tag = n.level ?? 'span';
+      const el = `<${tag} id="${escapeAttr(n.id)}" className="${cls}">{text[${quoteId(
+        n.id,
+      )}] ?? ${JSON.stringify(n.text)}}</${tag}>`;
+      return wrapHref(el, n.href);
     }
     case 'icon': {
       const size = n.size ?? ICON_DEFAULT_SIZE_PX;
@@ -158,14 +168,21 @@ const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
         ...positionParts(n, positioned),
         `w-${px(n.w)}`,
         `h-${px(n.h)}`,
-        `bg-[${IMAGE_PLACEHOLDER_BG}]`,
       ];
       if (n.r !== undefined) parts.push(`rounded-${px(n.r)}`);
       if (n.fit) parts.push(FIT_CLASS[n.fit]);
+      if (!n.src) {
+        const cls = posCls(
+          positioned,
+          [...parts, `bg-[${IMAGE_PLACEHOLDER_BG}]`].join(' '),
+        );
+        return `<div id="${escapeAttr(n.id)}" className="${cls}" />`;
+      }
       const cls = posCls(positioned, parts.join(' '));
-      return `<div id="${escapeAttr(n.id)}" className="${cls}" data-src="${escapeAttr(
+      const el = `<img id="${escapeAttr(n.id)}" className="${cls}" src="${escapeAttr(
         n.src,
-      )}" />`;
+      )}" alt="${escapeAttr(n.alt ?? '')}" />`;
+      return wrapHref(el, n.href);
     }
     case 'input': {
       const inputType = n.inputType ?? 'text';
@@ -225,9 +242,12 @@ const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
           hoverCls,
         ].join(' '),
       );
-      return `<button id="${escapeAttr(n.id)}" type="button"${disabledAttr} className="${cls}">${escapeJsxText(
+      const el = `<button id="${escapeAttr(n.id)}" type="button"${disabledAttr} onClick={on[${quoteId(
+        n.id,
+      )}]} className="${cls}">{text[${quoteId(n.id)}] ?? ${JSON.stringify(
         n.label,
-      )}</button>`;
+      )}}</button>`;
+      return wrapHref(el, n.href);
     }
     case 'layer': {
       const parts: string[] = [
@@ -245,10 +265,11 @@ const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
         );
       }
       const inner = n.children.map((c) => emitNode(c, true, ctx)).join('');
-      return `<div id="${escapeAttr(n.id)}" className="${posCls(
+      const tag = n.role ?? 'div';
+      return `<${tag} id="${escapeAttr(n.id)}" className="${posCls(
         positioned,
         parts.join(' '),
-      )}">${inner}</div>`;
+      )}">${inner}</${tag}>`;
     }
     case 'stack': {
       const direction = n.direction ?? 'row';
@@ -260,10 +281,11 @@ const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
       if (n.gap !== undefined) parts.push(`gap-${px(n.gap)}`);
       if (n.align) parts.push(STACK_ALIGN_CLASS[n.align]);
       const inner = n.children.map((c) => emitNode(c, false, ctx)).join('');
-      return `<div id="${escapeAttr(n.id)}" className="${posCls(
+      const tag = n.role ?? 'div';
+      return `<${tag} id="${escapeAttr(n.id)}" className="${posCls(
         positioned,
         parts.join(' '),
-      )}">${inner}</div>`;
+      )}">${inner}</${tag}>`;
     }
     case 'grid': {
       const parts: string[] = [
@@ -274,10 +296,11 @@ const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
       ];
       if (n.gap !== undefined) parts.push(`gap-${px(n.gap)}`);
       const inner = n.children.map((c) => emitNode(c, false, ctx)).join('');
-      return `<div id="${escapeAttr(n.id)}" className="${posCls(
+      const tag = n.role ?? 'div';
+      return `<${tag} id="${escapeAttr(n.id)}" className="${posCls(
         positioned,
         parts.join(' '),
-      )}">${inner}</div>`;
+      )}">${inner}</${tag}>`;
     }
     case 'repeat': {
       const count = Math.max(1, n.count);
@@ -298,7 +321,12 @@ const emitNode = (n: Node, positioned: boolean, ctx: Ctx): string => {
   }
 };
 
-export const toReact = (scene: Scene): string => {
+export type ToReactOptions = {
+  /** sha256 of the source DSL — embedded in the generated header for drift checks. */
+  dslSha256?: string;
+};
+
+export const toReact = (scene: Scene, options: ToReactOptions = {}): string => {
   const tokens = new Map(scene.tokens.map((t) => [t.id, t.value]));
   const resolveColor = (c: Color): string =>
     c.startsWith('$') ? tokens.get(c.slice(1)) ?? c : c;
@@ -321,7 +349,16 @@ export const toReact = (scene: Scene): string => {
   )} h-${px(scene.screen.h)}${theme === 'dark' ? ` ${SCREEN_DARK_CLASS}` : ''}`;
 
   return [
-    `export default function GeneratedScreen() {`,
+    `// GENERATED by PixelAgent -- dsl-sha256:${options.dslSha256 ?? 'unverified'} -- do not edit; edit the DSL and regenerate.`,
+    ``,
+    `export type GeneratedScreenProps = {`,
+    `  /** Override TEXT/BUTTON content by element id. Defaults come from the DSL. */`,
+    `  text?: Partial<Record<string, string>>;`,
+    `  /** Click handlers by element id (BUTTON elements). */`,
+    `  on?: Partial<Record<string, () => void>>;`,
+    `};`,
+    ``,
+    `export default function GeneratedScreen({ text = {}, on = {} }: GeneratedScreenProps) {`,
     `  return (`,
     `    <div className="${screenCls}">${body}</div>`,
     `  );`,
