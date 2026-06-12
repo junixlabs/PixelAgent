@@ -27,6 +27,8 @@ import type {
   Theme,
   Weight,
   Align,
+  HeadingLevel,
+  ContainerRole,
 } from '@pixelagent/dsl-spec';
 import type { Token } from './types.js';
 import { tokenize } from './tokenizer.js';
@@ -60,6 +62,15 @@ const VALID_ALIGNS: Align[] = ['left', 'center', 'right'];
 const VALID_WEIGHTS: Weight[] = ['regular', 'medium', 'semibold', 'bold'];
 const VALID_DIRECTIONS: Direction[] = ['row', 'column'];
 const VALID_FITS: Fit[] = ['cover', 'contain', 'fill'];
+const VALID_HEADING_LEVELS: HeadingLevel[] = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+const VALID_CONTAINER_ROLES: ContainerRole[] = [
+  'nav',
+  'header',
+  'main',
+  'section',
+  'aside',
+  'footer',
+];
 const VALID_INPUT_TYPES: InputType[] = [
   'text',
   'email',
@@ -641,6 +652,11 @@ function parseText(rest: Token[], line: number, errors: ValidationWarning[]): Te
     if (mw !== undefined) node.maxWidth = mw;
   }
   if (kvs.goto !== undefined) node.goto = kvs.goto;
+  if (kvs.level !== undefined) {
+    const l = checkEnum(kvs.level, VALID_HEADING_LEVELS, 'level', line, errors);
+    if (l) node.level = l;
+  }
+  if (kvs.href !== undefined) node.href = stripQuotes(kvs.href);
   return node;
 }
 
@@ -678,6 +694,8 @@ function parseImage(rest: Token[], line: number, errors: ValidationWarning[]): I
     if (r !== undefined) node.r = r;
   }
   if (kvs.goto !== undefined) node.goto = kvs.goto;
+  if (kvs.alt !== undefined) node.alt = stripQuotes(kvs.alt);
+  if (kvs.href !== undefined) node.href = stripQuotes(kvs.href);
   return node;
 }
 
@@ -721,6 +739,7 @@ function parseButton(rest: Token[], line: number, errors: ValidationWarning[]): 
     if (s) node.state = s;
   }
   if (kvs.goto !== undefined) node.goto = kvs.goto;
+  if (kvs.href !== undefined) node.href = stripQuotes(kvs.href);
   return node;
 }
 
@@ -740,6 +759,10 @@ function parseLayerHeader(rest: Token[], line: number, errors: ValidationWarning
   if (kvs.border !== undefined) {
     const b = parseBorder(kvs.border, line, errors);
     if (b) node.border = b;
+  }
+  if (kvs.role !== undefined) {
+    const ro = checkEnum(kvs.role, VALID_CONTAINER_ROLES, 'role', line, errors);
+    if (ro) node.role = ro;
   }
   return node;
 }
@@ -761,6 +784,10 @@ function parseStackHeader(rest: Token[], line: number, errors: ValidationWarning
   if (kvs.align !== undefined) {
     const a = checkEnum(kvs.align, VALID_ALIGNS, 'align', line, errors);
     if (a) node.align = a;
+  }
+  if (kvs.role !== undefined) {
+    const ro = checkEnum(kvs.role, VALID_CONTAINER_ROLES, 'role', line, errors);
+    if (ro) node.role = ro;
   }
   return node;
 }
@@ -787,6 +814,10 @@ function parseGridHeader(rest: Token[], line: number, errors: ValidationWarning[
   if (kvs.gap !== undefined) {
     const g = parseIntKv(kvs.gap, 'gap', line, errors);
     if (g !== undefined) node.gap = g;
+  }
+  if (kvs.role !== undefined) {
+    const ro = checkEnum(kvs.role, VALID_CONTAINER_ROLES, 'role', line, errors);
+    if (ro) node.role = ro;
   }
   return node;
 }

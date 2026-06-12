@@ -220,3 +220,51 @@ describe('goto flow link param', () => {
     expect(result.errors[0]).toContain('identifier');
   });
 });
+
+describe('semantic intent params', () => {
+  const dsl = [
+    'SCREEN 800 600',
+    'LAYER shell 0 0 800 80 role:header',
+    '  TEXT t 16 16 "Title" level:h2 href:"https://a.b"',
+    'END',
+    'IMAGE i 16 120 100 100 "x.png" alt:"pic"',
+    '',
+  ].join('\n');
+
+  it('parses and round-trips level/href/alt/role through serialize', () => {
+    const a = parse(dsl);
+    expect(a.warnings.filter((w) => w.severity === 'error')).toHaveLength(0);
+    const text = serialize(a.scene!);
+    expect(text).toContain('role:header');
+    expect(text).toContain('level:h2');
+    expect(text).toContain('href:"https://a.b"');
+    expect(text).toContain('alt:"pic"');
+    const b = parse(text);
+    expect(b.warnings.filter((w) => w.severity === 'error')).toHaveLength(0);
+  });
+
+  it('rejects invalid level and role values', () => {
+    expect(
+      parse('SCREEN 100 100\nTEXT t 0 0 "x" level:h7\n').warnings.some(
+        (w) => w.severity === 'error',
+      ),
+    ).toBe(true);
+    expect(
+      parse(
+        'SCREEN 100 100\nLAYER l 0 0 10 10 role:hero\nEND\n',
+      ).warnings.some((w) => w.severity === 'error'),
+    ).toBe(true);
+  });
+
+  it('modify op can set role and level', () => {
+    const { scene } = parse(dsl);
+    const result = applyPatch(scene!, [
+      { op: 'modify', id: 'shell', field: 'role', value: 'footer' },
+      { op: 'modify', id: 't', field: 'level', value: 'h3' },
+    ]);
+    expect(result.errors).toHaveLength(0);
+    const text = serialize(result.scene);
+    expect(text).toContain('role:footer');
+    expect(text).toContain('level:h3');
+  });
+});

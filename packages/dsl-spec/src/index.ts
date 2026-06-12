@@ -23,6 +23,16 @@ export type TokenRef = `$${string}`;
 export type Theme = 'light' | 'dark';
 export type Align = 'left' | 'center' | 'right';
 export type Weight = 'regular' | 'medium' | 'semibold' | 'bold';
+/** Semantic heading level for codegen (`<h1>`–`<h6>`). Renderer-inert. */
+export type HeadingLevel = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+/** Semantic container role for codegen (`<nav>`, `<main>`, …). Renderer-inert. */
+export type ContainerRole =
+  | 'nav'
+  | 'header'
+  | 'main'
+  | 'section'
+  | 'aside'
+  | 'footer';
 export type Direction = 'row' | 'column';
 export type Fit = 'cover' | 'contain' | 'fill';
 export type InputType =
@@ -121,6 +131,10 @@ export type TextNode = {
   maxWidth?: number;
   /** Flow link: id of the screen this element navigates to in preview. */
   goto?: string;
+  /** Semantic heading level — codegen emits <h1>–<h6>. */
+  level?: HeadingLevel;
+  /** External link — codegen wraps in <a href>. */
+  href?: string;
 };
 
 export type IconNode = {
@@ -145,6 +159,9 @@ export type ImageNode = {
   fit?: Fit;
   r?: number;
   goto?: string;
+  /** Accessibility/SEO alt text — codegen emits it on the <img>. */
+  alt?: string;
+  href?: string;
 };
 
 export type InputNode = {
@@ -171,6 +188,7 @@ export type ButtonNode = {
   variant?: ButtonVariant;
   state?: ElementState;
   goto?: string;
+  href?: string;
 };
 
 export type LayerNode = {
@@ -183,6 +201,8 @@ export type LayerNode = {
   bg?: Color;
   r?: number;
   border?: Border;
+  /** Semantic container role — codegen emits <nav>/<main>/… instead of <div>. */
+  role?: ContainerRole;
   children: Node[];
 };
 
@@ -198,6 +218,7 @@ export type StackNode = {
   direction?: Direction;
   gap?: number;
   align?: Align;
+  role?: ContainerRole;
   children: Node[];
 };
 
@@ -209,6 +230,7 @@ export type GridNode = {
   w: number;
   columns: number;
   gap?: number;
+  role?: ContainerRole;
   children: Node[];
 };
 

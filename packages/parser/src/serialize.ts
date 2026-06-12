@@ -48,6 +48,8 @@ const nodeLines = (n: Node, depth: number): string[] => {
         ['align', n.align],
         ['max-width', n.maxWidth],
         ['goto', n.goto],
+        ['level', n.level],
+        ['href', n.href !== undefined ? quote(n.href) : undefined],
       ]);
       return [kv.length ? `${head} ${kv.join(' ')}` : head];
     }
@@ -66,6 +68,8 @@ const nodeLines = (n: Node, depth: number): string[] => {
         ['fit', n.fit],
         ['r', n.r],
         ['goto', n.goto],
+        ['alt', n.alt !== undefined ? quote(n.alt) : undefined],
+        ['href', n.href !== undefined ? quote(n.href) : undefined],
       ]);
       return [kv.length ? `${head} ${kv.join(' ')}` : head];
     }
@@ -85,6 +89,7 @@ const nodeLines = (n: Node, depth: number): string[] => {
         ['variant', n.variant],
         ['state', n.state],
         ['goto', n.goto],
+        ['href', n.href !== undefined ? quote(n.href) : undefined],
       ]);
       return [kv.length ? `${head} ${kv.join(' ')}` : head];
     }
@@ -94,6 +99,7 @@ const nodeLines = (n: Node, depth: number): string[] => {
         ['bg', n.bg],
         ['r', n.r],
         ['border', n.border ? borderStr(n.border) : undefined],
+        ['role', n.role],
       ]);
       const open = kv.length ? `${head} ${kv.join(' ')}` : head;
       const inner = n.children.flatMap((c) => nodeLines(c, depth + 1));
@@ -105,6 +111,7 @@ const nodeLines = (n: Node, depth: number): string[] => {
         ['direction', n.direction],
         ['gap', n.gap],
         ['align', n.align],
+        ['role', n.role],
       ]);
       const open = kv.length ? `${head} ${kv.join(' ')}` : head;
       const inner = n.children.flatMap((c) => nodeLines(c, depth + 1));
@@ -115,6 +122,7 @@ const nodeLines = (n: Node, depth: number): string[] => {
       const kv = kvParts([
         ['columns', n.columns],
         ['gap', n.gap],
+        ['role', n.role],
       ]);
       const open = kv.length ? `${head} ${kv.join(' ')}` : head;
       const inner = n.children.flatMap((c) => nodeLines(c, depth + 1));

@@ -1,5 +1,5 @@
 import { parse, type ValidationWarning } from '@pixelagent/parser';
-import { toReact } from '@pixelagent/codegen';
+import { sha256Hex, toReact } from '@pixelagent/codegen';
 import { mergeProjectTokens } from './load-tokens-dsl.js';
 
 export type SynthesizeTarget = 'react';
@@ -35,8 +35,13 @@ export const synthesizeService = async (
   if (errors.length > 0 || parsed.scene == null) {
     return { ok: false, kind: 'parse_failed', errors };
   }
+  // The hash covers the caller's DSL verbatim (not the token-merged copy) —
+  // the contract binds the generated file to the .dsl the user owns.
+  const opts = { dslSha256: sha256Hex(input.dsl) };
   const code =
-    input.target === 'react' ? toReact(parsed.scene) : toReact(parsed.scene);
+    input.target === 'react'
+      ? toReact(parsed.scene, opts)
+      : toReact(parsed.scene, opts);
   return {
     ok: true,
     code,

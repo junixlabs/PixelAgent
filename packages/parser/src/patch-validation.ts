@@ -10,6 +10,10 @@ const VALID_INPUT_TYPES = ['text', 'email', 'password', 'number', 'tel', 'url'] 
 const VALID_BUTTON_VARIANTS = ['primary', 'secondary', 'ghost', 'destructive'] as const;
 const VALID_ELEMENT_STATES = ['default', 'hover', 'focus', 'active', 'disabled'] as const;
 const VALID_EFFECTS = ['shadow', 'blur', 'overlay'] as const;
+const VALID_HEADING_LEVELS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const;
+const VALID_CONTAINER_ROLES = [
+  'nav', 'header', 'main', 'section', 'aside', 'footer',
+] as const;
 const VALID_NODE_TYPES = [
   'fill', 'rect', 'text', 'icon', 'image', 'input', 'button',
   'layer', 'stack', 'grid', 'repeat', 'state', 'effect',
@@ -81,9 +85,13 @@ const RULES: Record<string, Record<string, Validator>> = {
     x: num, y: num, text: str,
     size: num, weight: enumOf(VALID_WEIGHTS), color,
     align: enumOf(VALID_ALIGNS), 'max-width': num, maxWidth: num, goto: ident,
+    level: enumOf(VALID_HEADING_LEVELS), href: str,
   },
   icon: { x: num, y: num, name: str, size: num, color, goto: ident },
-  image: { x: num, y: num, w: num, h: num, src: str, fit: enumOf(VALID_FITS), r: num, goto: ident },
+  image: {
+    x: num, y: num, w: num, h: num, src: str, fit: enumOf(VALID_FITS), r: num,
+    goto: ident, alt: str, href: str,
+  },
   input: {
     x: num, y: num, w: num, h: num,
     type: enumOf(VALID_INPUT_TYPES), inputType: enumOf(VALID_INPUT_TYPES),
@@ -92,14 +100,17 @@ const RULES: Record<string, Record<string, Validator>> = {
   button: {
     x: num, y: num, w: num, h: num, label: str,
     variant: enumOf(VALID_BUTTON_VARIANTS), state: enumOf(VALID_ELEMENT_STATES),
-    goto: ident,
+    goto: ident, href: str,
   },
-  layer: { x: num, y: num, w: num, h: num, bg: color, r: num, border },
+  layer: {
+    x: num, y: num, w: num, h: num, bg: color, r: num, border,
+    role: enumOf(VALID_CONTAINER_ROLES),
+  },
   stack: {
     x: num, y: num, direction: enumOf(VALID_DIRECTIONS),
-    gap: num, align: enumOf(VALID_ALIGNS),
+    gap: num, align: enumOf(VALID_ALIGNS), role: enumOf(VALID_CONTAINER_ROLES),
   },
-  grid: { x: num, y: num, w: num, columns: num, gap: num },
+  grid: { x: num, y: num, w: num, columns: num, gap: num, role: enumOf(VALID_CONTAINER_ROLES) },
   repeat: { count: num, direction: enumOf(VALID_DIRECTIONS), gap: num },
   fill: { x: num, y: num, w: num, h: num, color },
 };

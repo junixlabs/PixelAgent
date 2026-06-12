@@ -41,13 +41,13 @@ END
 ### Paint (no children)
 - \`FILL <x> <y> <w> <h> <color>\` — solid color region. No id (paint-only).
 - \`RECT <id> <x> <y> <w> <h> [bg:] [r:] [border:<w> <color>]\` — rectangle.
-- \`TEXT <id> <x> <y> "<text>" [size:] [weight:regular|medium|semibold|bold] [color:] [align:left|center|right] [max-width:] [goto:]\`
+- \`TEXT <id> <x> <y> "<text>" [size:] [weight:regular|medium|semibold|bold] [color:] [align:left|center|right] [max-width:] [goto:] [level:h1..h6] [href:"..."]\`
 - \`ICON <id> <x> <y> "<name>" [size:] [color:] [goto:]\` — \`size\` defaults to 16.
-- \`IMAGE <id> <x> <y> <w> <h> "<src>" [fit:cover|contain|fill] [r:] [goto:]\`
+- \`IMAGE <id> <x> <y> <w> <h> "<src>" [fit:cover|contain|fill] [r:] [goto:] [alt:"..."] [href:"..."]\`
 
 ### Components
 - \`INPUT <id> <x> <y> <w> <h> [type:text|email|password|number|tel|url] [placeholder:"..."] [label:"..."] [state:default|hover|focus|active|disabled]\`
-- \`BUTTON <id> <x> <y> <w> <h> "<label>" [variant:primary|secondary|ghost|destructive] [state:...] [goto:]\`
+- \`BUTTON <id> <x> <y> <w> <h> "<label>" [variant:primary|secondary|ghost|destructive] [state:...] [goto:] [href:"..."]\`
 
 ### Flow links
 \`goto:<screen-id>\` on TEXT / ICON / IMAGE / BUTTON marks the element as a
@@ -56,9 +56,17 @@ on \`pixelagent_preview\`) clicking it jumps to that screen. It carries no
 logic — a click can only reveal a visual state or jump screens, nothing else.
 
 ### Layout (block — end with END)
-- \`LAYER <id> <x> <y> <w> <h> [bg:] [r:] [border:]\` — absolute-positioned children container.
-- \`STACK <id> <x> <y> [direction:row|column] [gap:] [align:left|center|right]\` — auto-layout flex. Children must use \`x:0 y:0\`.
-- \`GRID <id> <x> <y> <w> columns:N [gap:]\` — grid container, \`columns\` required.
+- \`LAYER <id> <x> <y> <w> <h> [bg:] [r:] [border:] [role:]\` — absolute-positioned children container.
+- \`STACK <id> <x> <y> [direction:row|column] [gap:] [align:left|center|right] [role:]\` — auto-layout flex. Children must use \`x:0 y:0\`.
+- \`GRID <id> <x> <y> <w> columns:N [gap:] [role:]\` — grid container, \`columns\` required.
+
+### Semantic intent (renderer-inert — affects only synthesized code)
+Use these whenever the meaning is known; they make the final code
+semantic and SEO-capable at zero pixel cost:
+- \`level:h1..h6\` on TEXT → emits \`<h1>\`–\`<h6>\` (give every screen exactly one \`h1\`).
+- \`alt:"..."\` on IMAGE → alt text on the \`<img>\`.
+- \`href:"https://..."\` on TEXT/IMAGE/BUTTON → wraps the element in \`<a>\`.
+- \`role:nav|header|main|section|aside|footer\` on LAYER/STACK/GRID → semantic container tag.
 - \`REPEAT <id> <count> [direction:column|row] [gap:]\` — repeats children N times. Renderer auto-suffixes child ids per iteration (\`-1\`, \`-2\`, …).
 
 ### Meta
