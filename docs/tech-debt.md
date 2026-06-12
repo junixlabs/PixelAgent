@@ -1,5 +1,18 @@
 # Tech Debt
 
+## From case study #1 (Pixelight homepage, 2026-06-12)
+
+- **Renderer has no asset base directory** — local image srcs
+  (`pixelight-flow.png`) can't resolve in preview; authors must use https
+  URLs or placeholders. Candidate: optional `assetsBaseUrl` on preview.
+- **Serializer drops `#` comments** — a patch round-trip loses the
+  author's design-intent annotations. Candidate: preserve comment lines
+  attached to following node.
+- **Spec-level questions (need vision decisions, not code):** typeface
+  slot (`TOKEN font`?) — Inter-only renderer is the biggest visual
+  fidelity gap vs real designs; gradient values for `FILL`/`bg:`.
+  Documented in `docs/case-studies/pixelight/README.md`.
+
 ## ~~REPEAT layout not applied at render time~~ — FIXED 2026-05-07
 
 Rendered REPEAT iterations as `<div class="pa-flow">` and dropped
