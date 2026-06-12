@@ -177,3 +177,46 @@ describe('serialize', () => {
     expect(text).toContain('variant:destructive');
   });
 });
+
+describe('goto flow link param', () => {
+  const dsl = [
+    'SCREEN 800 600',
+    'BUTTON go-home 10 10 120 40 "Home" goto:home',
+    'TEXT back 10 80 "Back to login" color:#185FA5 goto:login',
+    '',
+  ].join('\n');
+
+  it('parses goto on BUTTON and TEXT', () => {
+    const { scene, warnings } = parse(dsl);
+    expect(warnings.filter((w) => w.severity === 'error')).toHaveLength(0);
+    const btn = scene!.nodes.find((n) => 'id' in n && n.id === 'go-home');
+    const txt = scene!.nodes.find((n) => 'id' in n && n.id === 'back');
+    expect((btn as { goto?: string }).goto).toBe('home');
+    expect((txt as { goto?: string }).goto).toBe('login');
+  });
+
+  it('round-trips goto through serialize → parse', () => {
+    const a = parse(dsl).scene!;
+    const b = parse(serialize(a)).scene!;
+    const btn = b.nodes.find((n) => 'id' in n && n.id === 'go-home');
+    expect((btn as { goto?: string }).goto).toBe('home');
+  });
+
+  it('modify op can set and patch goto', () => {
+    const { scene } = parse(dsl);
+    const result = applyPatch(scene!, [
+      { op: 'modify', id: 'go-home', field: 'goto', value: 'dashboard' },
+    ]);
+    expect(result.errors).toHaveLength(0);
+    expect(serialize(result.scene)).toContain('goto:dashboard');
+  });
+
+  it('modify op rejects a non-identifier goto value', () => {
+    const { scene } = parse(dsl);
+    const result = applyPatch(scene!, [
+      { op: 'modify', id: 'go-home', field: 'goto', value: '../evil' },
+    ]);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0]).toContain('identifier');
+  });
+});

@@ -47,6 +47,7 @@ const nodeLines = (n: Node, depth: number): string[] => {
         ['color', n.color],
         ['align', n.align],
         ['max-width', n.maxWidth],
+        ['goto', n.goto],
       ]);
       return [kv.length ? `${head} ${kv.join(' ')}` : head];
     }
@@ -55,6 +56,7 @@ const nodeLines = (n: Node, depth: number): string[] => {
       const kv = kvParts([
         ['size', n.size],
         ['color', n.color],
+        ['goto', n.goto],
       ]);
       return [kv.length ? `${head} ${kv.join(' ')}` : head];
     }
@@ -63,6 +65,7 @@ const nodeLines = (n: Node, depth: number): string[] => {
       const kv = kvParts([
         ['fit', n.fit],
         ['r', n.r],
+        ['goto', n.goto],
       ]);
       return [kv.length ? `${head} ${kv.join(' ')}` : head];
     }
@@ -81,6 +84,7 @@ const nodeLines = (n: Node, depth: number): string[] => {
       const kv = kvParts([
         ['variant', n.variant],
         ['state', n.state],
+        ['goto', n.goto],
       ]);
       return [kv.length ? `${head} ${kv.join(' ')}` : head];
     }

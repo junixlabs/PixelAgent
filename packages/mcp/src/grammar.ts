@@ -41,13 +41,19 @@ END
 ### Paint (no children)
 - \`FILL <x> <y> <w> <h> <color>\` — solid color region. No id (paint-only).
 - \`RECT <id> <x> <y> <w> <h> [bg:] [r:] [border:<w> <color>]\` — rectangle.
-- \`TEXT <id> <x> <y> "<text>" [size:] [weight:regular|medium|semibold|bold] [color:] [align:left|center|right] [max-width:]\`
-- \`ICON <id> <x> <y> "<name>" [size:] [color:]\` — \`size\` defaults to 16.
-- \`IMAGE <id> <x> <y> <w> <h> "<src>" [fit:cover|contain|fill] [r:]\`
+- \`TEXT <id> <x> <y> "<text>" [size:] [weight:regular|medium|semibold|bold] [color:] [align:left|center|right] [max-width:] [goto:]\`
+- \`ICON <id> <x> <y> "<name>" [size:] [color:] [goto:]\` — \`size\` defaults to 16.
+- \`IMAGE <id> <x> <y> <w> <h> "<src>" [fit:cover|contain|fill] [r:] [goto:]\`
 
 ### Components
 - \`INPUT <id> <x> <y> <w> <h> [type:text|email|password|number|tel|url] [placeholder:"..."] [label:"..."] [state:default|hover|focus|active|disabled]\`
-- \`BUTTON <id> <x> <y> <w> <h> "<label>" [variant:primary|secondary|ghost|destructive] [state:...]\`
+- \`BUTTON <id> <x> <y> <w> <h> "<label>" [variant:primary|secondary|ghost|destructive] [state:...] [goto:]\`
+
+### Flow links
+\`goto:<screen-id>\` on TEXT / ICON / IMAGE / BUTTON marks the element as a
+link to another screen. In a multi-screen preview bundle (\`screens\` + \`entry\`
+on \`pixelagent_preview\`) clicking it jumps to that screen. It carries no
+logic — a click can only reveal a visual state or jump screens, nothing else.
 
 ### Layout (block — end with END)
 - \`LAYER <id> <x> <y> <w> <h> [bg:] [r:] [border:]\` — absolute-positioned children container.

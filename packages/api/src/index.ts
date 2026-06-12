@@ -8,10 +8,14 @@
 export { buildApp } from './server.js';
 export {
   previewService,
+  previewBundleService,
   type PreviewInput,
   type PreviewFormat,
   type PreviewOk,
   type PreviewErr,
+  type PreviewBundleInput,
+  type PreviewBundleOk,
+  type PreviewBundleErr,
 } from './services/preview.js';
 export {
   applyPatchService,

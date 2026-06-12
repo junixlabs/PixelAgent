@@ -640,6 +640,7 @@ function parseText(rest: Token[], line: number, errors: ValidationWarning[]): Te
     const mw = parseIntKv(kvs['max-width'], 'max-width', line, errors);
     if (mw !== undefined) node.maxWidth = mw;
   }
+  if (kvs.goto !== undefined) node.goto = kvs.goto;
   return node;
 }
 
@@ -655,6 +656,7 @@ function parseIcon(rest: Token[], line: number, errors: ValidationWarning[]): Ic
     if (s !== undefined) node.size = s;
   }
   if (kvs.color !== undefined) node.color = kvs.color;
+  if (kvs.goto !== undefined) node.goto = kvs.goto;
   return node;
 }
 
@@ -675,6 +677,7 @@ function parseImage(rest: Token[], line: number, errors: ValidationWarning[]): I
     const r = parseIntKv(kvs.r, 'r', line, errors);
     if (r !== undefined) node.r = r;
   }
+  if (kvs.goto !== undefined) node.goto = kvs.goto;
   return node;
 }
 
@@ -717,6 +720,7 @@ function parseButton(rest: Token[], line: number, errors: ValidationWarning[]): 
     const s = checkEnum(kvs.state, VALID_ELEMENT_STATES, 'state', line, errors);
     if (s) node.state = s;
   }
+  if (kvs.goto !== undefined) node.goto = kvs.goto;
   return node;
 }
 
