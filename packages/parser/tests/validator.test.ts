@@ -177,6 +177,112 @@ describe('validator — low-contrast', () => {
     ).not.toContain('low-contrast');
   });
 
+  it('token-coverage: raw hex duplicating a TOKEN value warns, $ref stays silent', () => {
+    const dup = rules(
+      [
+        'SCREEN 800 600',
+        'TOKEN primary #185FA5',
+        'RECT a 0 0 100 40 bg:#185fa5',
+        '',
+      ].join('\n'),
+    );
+    expect(dup).toContain('token-coverage');
+    const ok = rules(
+      [
+        'SCREEN 800 600',
+        'TOKEN primary #185FA5',
+        'RECT a 0 0 100 40 bg:$primary',
+        'RECT b 0 60 100 40 bg:#222222',
+        '',
+      ].join('\n'),
+    );
+    expect(ok).not.toContain('token-coverage');
+  });
+
+  it('hover-coverage: warns for the uncovered button only when some hover exists', () => {
+    const partial = parse(
+      [
+        'SCREEN 800 600',
+        'BUTTON a 0 0 100 40 "A"',
+        'BUTTON b 0 60 100 40 "B"',
+        'STATE a hover',
+        '  bg: #0C447C',
+        'END',
+        '',
+      ].join('\n'),
+    );
+    const w = partial.warnings.find((x) => x.rule === 'hover-coverage');
+    expect(w?.nodeId).toBe('b');
+
+    const draft = rules(
+      [
+        'SCREEN 800 600',
+        'BUTTON a 0 0 100 40 "A"',
+        'BUTTON b 0 60 100 40 "B"',
+        '',
+      ].join('\n'),
+    );
+    expect(draft).not.toContain('hover-coverage');
+  });
+
+  it('spacing-rhythm: flags near-equal gap drift, ignores deliberate jumps', () => {
+    const drift = parse(
+      [
+        'SCREEN 800 600',
+        'LAYER card 0 0 400 400',
+        '  TEXT r1 16 20 "one"',
+        '  TEXT r2 16 60 "two"',
+        '  TEXT r3 16 98 "three"',
+        'END',
+        '',
+      ].join('\n'),
+    );
+    const w = drift.warnings.find((x) => x.rule === 'spacing-rhythm');
+    expect(w).toBeDefined();
+    expect(w!.message).toContain('off by 2px');
+
+    const even = rules(
+      [
+        'SCREEN 800 600',
+        'LAYER card 0 0 400 400',
+        '  TEXT r1 16 20 "one"',
+        '  TEXT r2 16 60 "two"',
+        '  TEXT r3 16 100 "three"',
+        'END',
+        '',
+      ].join('\n'),
+    );
+    expect(even).not.toContain('spacing-rhythm');
+
+    const deliberate = rules(
+      [
+        'SCREEN 800 600',
+        'LAYER card 0 0 400 400',
+        '  TEXT r1 16 20 "one"',
+        '  TEXT r2 16 60 "two"',
+        '  TEXT r3 16 160 "three"',
+        'END',
+        '',
+      ].join('\n'),
+    );
+    expect(deliberate).not.toContain('spacing-rhythm');
+  });
+
+  it('low-contrast skips TEXT painted over a sibling RECT (visible bg unknown)', () => {
+    expect(
+      rules(
+        [
+          'SCREEN 800 600',
+          'LAYER card 0 0 400 200 bg:#ffffff',
+          '  RECT avatar 10 10 32 32 bg:#185FA5 r:16',
+          '  TEXT initials 12 16 "JL" color:#ffffff',
+          'END',
+          '',
+        ].join('\n'),
+      ),
+    ).not.toContain('low-contrast');
+  });
+
   it('nested LAYER without bg inherits the outer bg context', () => {
     expect(
       rules(
